@@ -1,7 +1,9 @@
+import {createWand,createRune} from './items.js';
+import {nextRandom} from './rng.js';
 import {floorTrace} from './generator.js';
 import {tickEncounters} from './locations.js';
-import {CONFIG,ICE_BALANCE,LIGHTNING_BALANCE,AIR_BALANCE,EARTH_BALANCE,TEST_BALANCE,SCENE_BALANCE,PVP_BALANCE,PLAYER_BALANCE,ENEMY_BALANCE} from './balance.js';
-import {WANDS,scaledNormal,lightningPoint} from './wands.js';
+import {CONFIG,EARTH_BALANCE,SCENE_BALANCE,PVP_BALANCE,PLAYER_BALANCE,ENEMY_BALANCE,ITEM_BALANCE,RARITIES} from './balance.js';
+import {WANDS,scaledNormal,lightningPoint,spellBalance,wandStats} from './wands.js';
 export {CONFIG} from './balance.js';
 export {createRandom,nextRandom} from './rng.js';
 // The world state is plain JSON-serializable data. All rules are functions of (state, player id, input).
@@ -37,13 +39,14 @@ export function setMode(s,id,mode){const p=getPlayer(s,id);if(!p||!['Safe','Norm
 export function cancelCharge(s,id){const p=getPlayer(s,id);if(p)p.charge=0;}
 export function dropWand(s,id){
  const p=getPlayer(s,id);if(!p?.wand)return false;
- s.items.push({...p.wand,x:Math.max(CONFIG.playerRadius,Math.min(world(s).width-CONFIG.playerRadius,p.x+Math.cos(p.angle)*CONFIG.dropDistance)),y:Math.max(CONFIG.playerRadius,Math.min(world(s).height-CONFIG.playerRadius,p.y+Math.sin(p.angle)*CONFIG.dropDistance)),availableAt:s.time+CONFIG.pickupDelay});
+ s.items.push({...p.wand,...dropPoint(s,p),availableAt:s.time+CONFIG.pickupDelay});
  p.wand=null;p.charge=0;return true;
 }
 // Discrete player actions travel as commands next to the continuous input so none is lost between ticks.
 export function applyCommand(s,id,command){
- if(command.type==='setMode')setMode(s,id,command.mode);
- else if(command.type==='dropRune'){const p=getPlayer(s,id);if(p?.rune){s.items.push({...p.rune,kind:'rune',x:p.x+50,y:p.y,availableAt:s.time+CONFIG.pickupDelay});p.rune=null;}}
+ if(command.type==='setRarity'&&s.scene.id==='debug'&&RARITIES.includes(command.rarity)){s.debugRarity=command.rarity;for(const player of s.players)player.activePedestal=null;}
+ else if(command.type==='setMode')setMode(s,id,command.mode);
+ else if(command.type==='dropRune'){const p=getPlayer(s,id);if(p?.rune){s.items.push({...p.rune,kind:'rune',...dropPoint(s,p),availableAt:s.time+CONFIG.pickupDelay});p.rune=null;p.charge=0;}}
  else if(command.type==='drop')dropWand(s,id);
  else if(command.type==='release')release(s,id);
  else if(command.type==='cancel')cancelCharge(s,id);
@@ -53,16 +56,14 @@ export function readyPortal(s){
  if(!s.players.length)return null;
  return s.portals.find(portal=>portal.available&&s.players.every(p=>p.nearPortal===portal.id))??null;
 }
-function effect(s,details,duration){s.effects.push({...details,life:duration,duration});}
+function effect(s,details,duration){s.effects.push({...Object.fromEntries(Object.entries(details).filter(([,v])=>v!==undefined)),life:duration,duration});}
 const isPlayer=(s,actor)=>s.players.includes(actor);
 const radiusOf=(s,actor)=>isPlayer(s,actor)?CONFIG.playerRadius:(ENEMY_BALANCE[actor.type]?.radius??CONFIG.targetRadius);
 const hitKey=(s,actor)=>`${isPlayer(s,actor)?'p':(s.enemies?.includes(actor)?'e':'t')}${actor.id}`;
 // Everything an attack of this owner can affect: dummies and other players, never the attacker.
 function victims(s,ownerId){return [...s.targets,...(s.enemies??[]).filter(e=>e.health>0),...s.players.filter(p=>p.id!==ownerId&&p.health>0)];}
 function damage(s,victim,amount,enemy=false){const actual=isPlayer(s,victim)&&!enemy?amount*PVP_BALANCE.friendlyFireMultiplier:amount;victim.hits++;victim.damage+=actual;if(victim.health!==undefined)victim.health=Math.max(0,victim.health-actual);}
-const runeFactor=(p,type)=>p.rune?.type===type?p.rune.factor:1;
 function areaDamage(s,owner,x,y,radius,amount){
- radius*=runeFactor(owner,'size');amount*=runeFactor(owner,'damage');
  for(const target of victims(s,owner.id))if(Math.hypot(target.x-x,target.y-y)<=radius+radiusOf(s,target))damage(s,target,amount);
 }
 function pushTarget(s,target,x,y,distance,fallbackAngle){
@@ -70,16 +71,16 @@ function pushTarget(s,target,x,y,distance,fallbackAngle){
  if(length<.001){dx=Math.cos(fallbackAngle);dy=Math.sin(fallbackAngle);length=1;}
  moveActor(s,target,dx/length*distance,dy/length*distance,radiusOf(s,target));
 }
-function areaPush(s,owner,x,y,radius,distance){radius*=runeFactor(owner,'size');for(const target of victims(s,owner.id))if(Math.hypot(target.x-x,target.y-y)<=radius+radiusOf(s,target))pushTarget(s,target,x,y,distance,owner.angle);}
-function createEarthWall(s,p){
- const b=EARTH_BALANCE,horizontal=Math.abs(Math.cos(p.angle))<Math.abs(Math.sin(p.angle));
+function areaPush(s,owner,x,y,radius,distance){for(const target of victims(s,owner.id))if(Math.hypot(target.x-x,target.y-y)<=radius+radiusOf(s,target))pushTarget(s,target,x,y,distance,owner.angle);}
+function createEarthWall(s,p,projectileOnly=false){
+ const b=spellBalance(p),horizontal=Math.abs(Math.cos(p.angle))<Math.abs(Math.sin(p.angle));
  const width=horizontal?b.wallLength:b.wallThickness,height=horizontal?b.wallThickness:b.wallLength;
  const x=Math.max(0,Math.min(world(s).width-width,p.x+Math.cos(p.angle)*b.wallDistance-width/2));
  const y=Math.max(0,Math.min(world(s).height-height,p.y+Math.sin(p.angle)*b.wallDistance-height/2));
  // Do not create solid geometry overlapping an actor or an existing wall.
- if([...s.players,...s.targets,...(s.enemies??[])].some(a=>a.x+CONFIG.playerRadius>x&&a.x-CONFIG.playerRadius<x+width&&a.y+CONFIG.playerRadius>y&&a.y-CONFIG.playerRadius<y+height))return false;
+ if(!projectileOnly&&[...s.players,...s.targets,...(s.enemies??[])].some(a=>a.x+CONFIG.playerRadius>x&&a.x-CONFIG.playerRadius<x+width&&a.y+CONFIG.playerRadius>y&&a.y-CONFIG.playerRadius<y+height))return false;
  if(s.walls.some(w=>x<w.x+w.width&&x+width>w.x&&y<w.y+w.height&&y+height>w.y))return false;
- s.walls.push({id:s.nextId++,x,y,width,height,expiresAt:s.time+b.wallDuration,owner:p.id});return true;
+ s.walls.push({id:s.nextId++,x,y,width,height,expiresAt:s.time+b.wallDuration,owner:p.id,projectileOnly,kind:projectileOnly?'lightWall':'earthWall'});return true;
 }
 function projectile(s,p,details){
  const angle=details.angle??p.angle,radius=details.kind==='coldWave'?details.depth:details.radius;
@@ -87,51 +88,63 @@ function projectile(s,p,details){
  const hit=wallTrace(s,p.x,p.y,dx,dy,radius),offset=hit?Math.max(0,hit.t-1e-5):1;
  const x=Math.max(radius,Math.min(world(s).width-radius,p.x+dx*offset));
  const y=Math.max(radius,Math.min(world(s).height-radius,p.y+dy*offset));
- const rune=p.rune;const multiplier=field=>rune?.type===field?rune.factor:1;
- s.projectiles.push({id:s.nextId++,owner:p.id,x,y,angle,distance:0,power:p.charge,...details,damage:details.damage*multiplier('damage'),range:details.range*multiplier('range'),radius:details.radius*multiplier('size')});
+ const fire=details.kind==='fire'?spellBalance(p):null;
+ s.projectiles.push({id:s.nextId++,owner:p.id,x,y,angle,distance:0,power:p.charge,...(fire?{splashRadius:fire.splashRadius*p.charge,splashDamage:scaledNormal(fire.splashDamage,CONFIG.minDamageFactor,p.charge)}:{}),...Object.fromEntries(Object.entries(details).filter(([,v])=>v!==undefined))});
 }
 export function release(s,id){
  const p=getPlayer(s,id);if(!p)return;
  if(p.health<=0||!p.wand||p.mode==='Safe'||p.charge<=0){p.charge=0;return;}
- const type=p.wand.type;if(p.mode==='Special'&&p.mana<PLAYER_BALANCE.specialMana){p.charge=0;return;}
+ const type=p.wand.type,balance=spellBalance(p),manaCost=wandStats(p).manaCost*(p.mode==='Special'?ITEM_BALANCE.specialMana/ITEM_BALANCE.normalMana:1);if(p.mana<manaCost){p.charge=0;return;}
+ const originalAngle=p.angle;
+ if(!['fire','air','test'].includes(type)||p.mode==='Normal')p.angle+=(nextRandom(s)*2-1)*wandStats(p).spread*(ITEM_BALANCE.spreadMin/ITEM_BALANCE.spreadStart+(1-ITEM_BALANCE.spreadMin/ITEM_BALANCE.spreadStart)*(1-p.charge));
  if(p.mode==='Normal'){
-  if(type==='fire')projectile(s,p,{kind:'fire',speed:CONFIG.projectileSpeed,radius:CONFIG.projectileRadius+CONFIG.chargedRadiusBonus*p.charge,range:scaledNormal(CONFIG.projectileRange,CONFIG.minRangeFactor,p.charge),damage:scaledNormal(CONFIG.normalDamage,CONFIG.minDamageFactor,p.charge)});
+  if(type==='fire')projectile(s,p,{kind:'fire',speed:balance.projectileSpeed,radius:balance.projectileRadius+balance.chargedRadiusBonus*p.charge,range:scaledNormal(balance.projectileRange,CONFIG.minRangeFactor,p.charge),damage:scaledNormal(balance.normalDamage,CONFIG.minDamageFactor,p.charge)});
   else if(type==='ice'){
-   const b=ICE_BALANCE;
-   for(let i=0;i<b.pellets;i++)projectile(s,p,{kind:'icicle',angle:p.angle+b.spread*(i/(b.pellets-1)-.5),speed:b.projectileSpeed,radius:b.pelletRadius+b.chargedRadiusBonus*p.charge,range:scaledNormal(b.projectileRange,CONFIG.minRangeFactor,p.charge),damage:scaledNormal(b.pelletDamage,CONFIG.minDamageFactor,p.charge)});
+   const b=balance;
+   const count=b.pellets+Math.floor(nextRandom(s)*3)-1;
+   for(let i=0;i<count;i++)projectile(s,p,{kind:'icicle',angle:p.angle+b.spread*(1-.7*p.charge)*(i/(count-1)-.5),speed:b.projectileSpeed,radius:b.pelletRadius+b.chargedRadiusBonus*p.charge,range:scaledNormal(b.projectileRange,CONFIG.minRangeFactor,p.charge),damage:scaledNormal(b.pelletDamage,CONFIG.minDamageFactor,p.charge)});
   }else if(type==='air'){
-   const b=AIR_BALANCE;projectile(s,p,{kind:'whirlwind',speed:b.projectileSpeed,radius:b.projectileRadius+b.chargedRadiusBonus*p.charge,range:scaledNormal(b.projectileRange,CONFIG.minRangeFactor,p.charge),damage:scaledNormal(b.normalDamage,CONFIG.minDamageFactor,p.charge),push:b.normalPush*p.charge});
+   const b=balance;projectile(s,p,{kind:'whirlwind',speed:b.projectileSpeed,radius:b.projectileRadius+b.chargedRadiusBonus*p.charge,range:scaledNormal(b.projectileRange,CONFIG.minRangeFactor,p.charge),damage:scaledNormal(b.normalDamage,CONFIG.minDamageFactor,p.charge),push:b.normalPush*p.charge});
   }else if(type==='earth'){
-   const b=EARTH_BALANCE;projectile(s,p,{kind:'boulder',speed:b.projectileSpeed,radius:b.projectileRadius+b.chargedRadiusBonus*p.charge,range:scaledNormal(b.projectileRange,CONFIG.minRangeFactor,p.charge),damage:scaledNormal(b.normalDamage,CONFIG.minDamageFactor,p.charge),ricochets:0,hitIds:[]});
+   const b=balance;projectile(s,p,{kind:'boulder',speed:b.projectileSpeed,radius:b.projectileRadius+b.chargedRadiusBonus*p.charge,range:scaledNormal(b.projectileRange,CONFIG.minRangeFactor,p.charge),damage:scaledNormal(b.normalDamage,CONFIG.minDamageFactor,p.charge),ricochets:0,hitIds:[]});
   }else if(type==='test'){
-   const b=TEST_BALANCE;projectile(s,p,{kind:'spark',speed:b.projectileSpeed,radius:b.projectileRadius+b.chargedRadiusBonus*p.charge,range:scaledNormal(b.projectileRange,CONFIG.minRangeFactor,p.charge),damage:0,push:b.normalPush*p.charge});
+   const b=balance;projectile(s,p,{kind:'spark',speed:b.projectileSpeed,radius:b.projectileRadius+b.chargedRadiusBonus*p.charge,range:scaledNormal(b.projectileRange,CONFIG.minRangeFactor,p.charge),damage:0,push:b.normalPush*p.charge});
+  }else if(['nature','gravity','light','crystal'].includes(type)){
+   const b=balance,kind={nature:'thorn',gravity:'gravityOrb',light:'lightDisc',crystal:'crystalShard'}[type];
+   projectile(s,p,{kind,speed:b.projectileSpeed,radius:b.projectileRadius+b.chargedRadiusBonus*p.charge,range:scaledNormal(b.projectileRange,CONFIG.minRangeFactor,p.charge),damage:scaledNormal(b.normalDamage,CONFIG.minDamageFactor,p.charge),hitIds:[],origin:{x:p.x,y:p.y},returning:false,rootDuration:b.rootDuration,pullRadius:b.pullRadius,pull:b.normalPull,homingRange:b.homingRange,homingAngle:b.homingAngle,turnSpeed:b.turnSpeed,childDamage:b.childDamage,childAngle:b.childAngle});
   }else if(type==='lightning'){
-   const b=LIGHTNING_BALANCE,range=scaledNormal(b.lineRange,CONFIG.minRangeFactor,p.charge)*runeFactor(p,'range');
+   const b=balance,range=scaledNormal(b.lineRange,CONFIG.minRangeFactor,p.charge);
    const wall=wallTrace(s,p.x,p.y,Math.cos(p.angle)*range,Math.sin(p.angle)*range,0);
    const visibleRange=range*(wall?.t??1);const x2=p.x+Math.cos(p.angle)*visibleRange,y2=p.y+Math.sin(p.angle)*visibleRange;
-   for(const target of victims(s,p.id))if(segmentDistance(target.x,target.y,p.x,p.y,x2,y2)<=radiusOf(s,target)+b.lineRadius*p.charge*runeFactor(p,'size'))damage(s,target,scaledNormal(b.lineDamage,CONFIG.minDamageFactor,p.charge)*runeFactor(p,'damage'));
+   for(const target of victims(s,p.id))if(segmentDistance(target.x,target.y,p.x,p.y,x2,y2)<=radiusOf(s,target)+b.lineRadius*p.charge)damage(s,target,scaledNormal(b.lineDamage,CONFIG.minDamageFactor,p.charge));
    effect(s,{kind:'lightningLine',x:p.x,y:p.y,x2,y2},b.lineDuration);
   }
  }else if(type==='lightning'){
   // A sky strike targets the reached point directly; it performs no wall trace.
-  const point=lightningPoint(p),b=LIGHTNING_BALANCE;
+  const point=lightningPoint(p),b=balance;
   areaDamage(s,p,point.x,point.y,b.strikeRadius,b.strikeDamage);
-  effect(s,{kind:'skyStrike',owner:p.id,...point,radius:b.strikeRadius*runeFactor(p,'size')},b.strikeDuration);
+  effect(s,{kind:'skyStrike',owner:p.id,...point,radius:b.strikeRadius},b.strikeDuration);
  }else if(p.charge>=1){
   if(type==='fire'){
-   areaDamage(s,p,p.x,p.y,CONFIG.specialRadius,CONFIG.specialDamage);
-   effect(s,{kind:'fireWave',owner:p.id,x:p.x,y:p.y,radius:CONFIG.specialRadius*runeFactor(p,'size')},CONFIG.specialDuration);
+   areaDamage(s,p,p.x,p.y,balance.specialRadius,balance.specialDamage);
+   effect(s,{kind:'fireWave',owner:p.id,x:p.x,y:p.y,radius:balance.specialRadius},CONFIG.specialDuration);
   }else if(type==='air'){
-   const b=AIR_BALANCE;areaPush(s,p,p.x,p.y,b.specialRadius,b.specialPush);effect(s,{kind:'airSphere',x:p.x,y:p.y,radius:b.specialRadius*runeFactor(p,'size')},b.specialDuration);
+   const b=balance;areaPush(s,p,p.x,p.y,b.specialRadius,b.specialPush);effect(s,{kind:'airSphere',x:p.x,y:p.y,radius:b.specialRadius},b.specialDuration);
   }else if(type==='earth'){
-   if(!createEarthWall(s,p)){p.charge=0;return;}
+   if(!createEarthWall(s,p)){p.angle=originalAngle;p.charge=0;return;}
   }else if(type==='test'){
-   const b=TEST_BALANCE;effect(s,{kind:'testSphere',x:p.x,y:p.y,radius:b.specialRadius*runeFactor(p,'size')},b.specialDuration);
+   const b=balance;effect(s,{kind:'testSphere',x:p.x,y:p.y,radius:b.specialRadius},b.specialDuration);
+  }else if(type==='light'){
+   if(!createEarthWall(s,p,true)){p.angle=originalAngle;p.charge=0;return;}
+  }else if(['nature','gravity','crystal'].includes(type)){
+   const b=balance,kind={nature:'vines',gravity:'gravityWell',crystal:'crystalTrap'}[type],distance=b.patchDistance??b.wellDistance??b.trapDistance;
+   const radius=b.patchRadius??b.wellRadius??b.trapRadius,x=Math.max(radius,Math.min(world(s).width-radius,p.x+Math.cos(p.angle)*distance)),y=Math.max(radius,Math.min(world(s).height-radius,p.y+Math.sin(p.angle)*distance));
+   effect(s,{kind,owner:p.id,x,y,radius,damage:b.wellDamage??b.trapDamage??0,tickInterval:b.tickInterval??.5,tick:0,pullSpeed:b.pullSpeed,slowFactor:b.slowFactor,shardCount:b.shardCount,shardSpeed:b.projectileSpeed,shardRange:b.projectileRange,shardRadius:b.projectileRadius},b.patchDuration??b.wellDuration??b.trapDuration);
   }else if(type==='ice'){
-   const b=ICE_BALANCE;projectile(s,p,{kind:'coldWave',speed:b.waveSpeed,range:b.waveRange,radius:b.waveRadius,depth:b.waveDepth,damage:b.waveDamage,hitIds:[]});
+   const b=balance;projectile(s,p,{kind:'coldWave',speed:b.waveSpeed,range:b.waveRange,radius:b.waveRadius,depth:b.waveDepth,damage:b.waveDamage,hitIds:[]});
   }
- }else{p.charge=0;return;}
- if(p.mode==='Special')p.mana-=PLAYER_BALANCE.specialMana;s.shots++;p.charge=0;
+ }else{p.angle=originalAngle;p.charge=0;return;}
+ p.angle=originalAngle;p.mana-=manaCost;s.shots++;p.charge=0;
 }
 function segmentDistance(x,y,ax,ay,bx,by){const dx=bx-ax,dy=by-ay;const t=Math.max(0,Math.min(1,((x-ax)*dx+(y-ay)*dy)/(dx*dx+dy*dy||1)));return Math.hypot(x-ax-t*dx,y-ay-t*dy);}
 // inputs maps a player id to {x,y,held,commands}; a missing entry means an idle player.
@@ -139,7 +152,9 @@ export function step(s,inputs,dt){
  s.time+=dt;s.walls=s.walls.filter(w=>w.permanent||w.expiresAt>s.time);
  for(const p of s.players)stepPlayer(s,p,inputs[p.id]??IDLE,dt);
  tickEncounters(s,dt,{move:moveActor,damage,trace:wallTrace});
- s.projectiles=s.projectiles.filter(b=>advanceProjectile(s,b,dt));
+ const projectiles=s.projectiles;s.projectiles=[];
+ for(const b of projectiles)if(advanceProjectile(s,b,dt))s.projectiles.push(b);
+ tickFields(s,dt);
  s.effects=s.effects.filter(e=>(e.life-=dt)>0);
 }
 function stepPlayer(s,p,input,dt){
@@ -152,20 +167,22 @@ function stepPlayer(s,p,input,dt){
   moveActor(s,p,x*CONFIG.speed*dt,y*CONFIG.speed*dt,CONFIG.playerRadius);
  }
  if(input.held&&p.wand&&p.mode!=='Safe'){
-  const b=WANDS[p.wand.type].balance;
+  const b=spellBalance(p);
   p.charge=Math.min(1,p.charge+dt/(p.mode==='Special'?b.specialChargeTime:b.chargeTime));
  }
  const pedestal=s.pedestals.find(i=>Math.hypot(i.x-p.x,i.y-p.y)<=SCENE_BALANCE.pedestalRadius);
- if(pedestal&&p.activePedestal!==pedestal.id){p.wand={id:s.nextId++,type:pedestal.type};p.charge=0;}
+ if(pedestal&&p.activePedestal!==pedestal.id){p.wand={id:s.nextId++,...createWand(pedestal.type,s.debugRarity??'Common',()=>nextRandom(s))};p.charge=0;}
  p.activePedestal=pedestal?.id??null;
+ const station=s.scene.id==='debug'&&s.runeStation;const near=station&&Math.hypot(station.x-p.x,station.y-p.y)<=SCENE_BALANCE.pedestalRadius;
+ if(near&&!p.activeRuneStation){p.rune={id:s.nextId++,...createRune(()=>nextRandom(s),s.debugRarity)};p.charge=0;}p.activeRuneStation=near?station.id:null;
  const portal=s.portals.find(i=>Math.hypot(i.x-p.x,i.y-p.y)<=SCENE_BALANCE.portalRadius);p.nearPortal=portal?.id??null;
  // Items are removed on pickup, so with several nearby players the first one in order takes it.
  const item=s.items.find(i=>(i.kind==='rune'?!p.rune:!p.wand)&&s.time>=i.availableAt&&Math.hypot(i.x-p.x,i.y-p.y)<=CONFIG.pickupRadius);
- if(item){if(item.kind==='rune')p.rune={id:item.id,type:item.type,factor:item.factor};else p.wand={id:item.id,type:item.type};s.items=s.items.filter(i=>i!==item);}
+ if(item){if(item.kind==='rune')p.rune={...item};else p.wand={...item};s.items=s.items.filter(i=>i!==item);}
 }
 
 // Slab intersection against expanded rectangles provides swept wall collision.
-function rectTrace(x,y,dx,dy,rect,radius){
+function rectTrace(x,y,dx,dy,rect,radius,allowEscape=false){
  let entry=-Infinity,exit=Infinity,nx=0,ny=0;
  for(const [origin,delta,min,max,axis] of [[x,dx,rect.x-radius,rect.x+rect.width+radius,'x'],[y,dy,rect.y-radius,rect.y+rect.height+radius,'y']]){
   if(Math.abs(delta)<1e-10){if(origin<min||origin>max)return null;continue;}
@@ -174,18 +191,20 @@ function rectTrace(x,y,dx,dy,rect,radius){
   if(entry>exit)return null;
  }
  if(exit<0||entry>1)return null;
- if(entry<0)return null; // Existing overlapping geometry must allow escape.
+ if(entry<0){if(allowEscape)return null;const length=Math.hypot(dx,dy)||1;return {t:0,nx:-dx/length,ny:-dy/length};} // Actors may escape overlaps; projectiles are blocked inside walls.
  return {t:Math.max(0,entry),nx,ny};
 }
-function wallTrace(s,x,y,dx,dy,radius){
+function wallTrace(s,x,y,dx,dy,radius,movement=false){
  let closest=s.map?floorTrace(s.map,x,y,dx,dy,radius):null;
- for(const wall of s.walls){const hit=rectTrace(x,y,dx,dy,wall,radius);if(hit&&(!closest||hit.t<closest.t))closest=hit;}
+ for(const wall of s.walls){if(movement&&wall.projectileOnly)continue;const hit=rectTrace(x,y,dx,dy,wall,radius,movement);if(hit&&(!closest||hit.t<closest.t))closest=hit;}
  return closest;
 }
 function moveActor(s,actor,dx,dy,radius){
- const xhit=wallTrace(s,actor.x,actor.y,dx,0,radius);
+ if((actor.rootUntil??0)>s.time)return;
+ const slow=s.effects.filter(e=>e.kind==='vines'&&s.enemies?.includes(actor)&&Math.hypot(actor.x-e.x,actor.y-e.y)<=e.radius+radius).reduce((value,e)=>Math.min(value,e.slowFactor),1);dx*=slow;dy*=slow;
+ const xhit=wallTrace(s,actor.x,actor.y,dx,0,radius,true);
  actor.x=Math.max(radius,Math.min(world(s).width-radius,actor.x+dx*(xhit?Math.max(0,xhit.t-1e-6):1)));
- const yhit=wallTrace(s,actor.x,actor.y,0,dy,radius);
+ const yhit=wallTrace(s,actor.x,actor.y,0,dy,radius,true);
  actor.y=Math.max(radius,Math.min(world(s).height-radius,actor.y+dy*(yhit?Math.max(0,yhit.t-1e-6):1)));
 }
 function boundaryTrace(s,x,y,dx,dy,radius){
@@ -197,6 +216,8 @@ function boundaryTrace(s,x,y,dx,dy,radius){
  return hit;
 }
 function advanceProjectile(s,b,dt){
+ if(b.kind==='crystalShard'&&!b.child)homeShard(s,b,dt);
+ if(b.kind==='lightDisc'&&b.returning){const owner=getPlayer(s,b.owner);if(!owner||owner.health<=0)return false;const dx=owner.x-b.x,dy=owner.y-b.y;if(Math.hypot(dx,dy)<=b.speed*dt+CONFIG.playerRadius)return false;b.angle=Math.atan2(dy,dx);}
  let remaining=Math.min(b.speed*dt,Math.max(0,b.range-b.distance));
  // Ricochets consume the same distance budget, even across several collisions.
  while(remaining>1e-8){
@@ -210,21 +231,62 @@ function advanceProjectile(s,b,dt){
    const tx=t.x-ax,ty=t.y-ay,forward=tx*Math.cos(b.angle)+ty*Math.sin(b.angle),side=-tx*Math.sin(b.angle)+ty*Math.cos(b.angle);
    return forward>=-b.depth-reach&&forward<=travel+b.depth+reach&&Math.abs(side)<=b.radius+reach;
   });
-  if(b.kind==='coldWave'||b.kind==='boulder'){
+  if(b.kind==='coldWave'||b.kind==='boulder'||b.kind==='lightDisc'){
    for(const target of targets)if(!b.hitIds.includes(hitKey(s,target))){damage(s,target,b.damage,Boolean(b.enemy));b.hitIds.push(hitKey(s,target));}
   }else if(targets.length){
-   const target=targets[0];damage(s,target,b.damage,Boolean(b.enemy));
+   const target=targets.sort((a,c)=>Math.hypot(a.x-ax,a.y-ay)-Math.hypot(c.x-ax,c.y-ay))[0];
+   if(b.kind==='fire'){const length=Math.hypot(b.x-ax,b.y-ay)||1,projection=((target.x-ax)*Math.cos(b.angle)+(target.y-ay)*Math.sin(b.angle));const travel=Math.max(0,Math.min(length,projection));b.x=ax+Math.cos(b.angle)*travel;b.y=ay+Math.sin(b.angle)*travel;explodeFire(s,b);}damage(s,target,b.damage,Boolean(b.enemy));
+   if(b.kind==='thorn'&&!isPlayer(s,target))target.rootUntil=s.time+b.rootDuration;
+   if(b.kind==='gravityOrb')for(const enemy of s.enemies??[])if(enemy.health>0&&Math.hypot(enemy.x-target.x,enemy.y-target.y)<=b.pullRadius)pullActor(s,enemy,target.x,target.y,b.pull);
+   if(b.kind==='crystalShard'&&!b.child)for(const side of [-1,1])s.projectiles.push({...b,id:s.nextId++,x:target.x+Math.cos(b.angle+side*b.childAngle)*(radiusOf(s,target)+b.radius+1),y:target.y+Math.sin(b.angle+side*b.childAngle)*(radiusOf(s,target)+b.radius+1),angle:b.angle+side*b.childAngle,range:Math.max(1,b.range-b.distance),distance:0,damage:b.damage*b.childDamage,radius:b.radius*.7,child:true});
    if(b.kind==='whirlwind'){
     const center={x:target.x,y:target.y};for(const t of victims(s,b.owner))if(Math.hypot(t.x-center.x,t.y-center.y)<=b.radius+radiusOf(s,t))pushTarget(s,t,ax,ay,b.push,b.angle);
    }else if(b.push)pushTarget(s,target,ax,ay,b.push,b.angle);
-   effect(s,{kind:b.kind==='icicle'?'iceImpact':b.kind==='spark'?'sparkImpact':b.kind==='whirlwind'?'airImpact':'impact',x:b.x,y:b.y,radius:(CONFIG.impactRadius+CONFIG.chargedImpactBonus)*b.power},CONFIG.impactDuration);return false;
+   if(b.kind!=='fire')effect(s,{kind:b.kind==='icicle'?'iceImpact':b.kind==='spark'?'sparkImpact':b.kind==='whirlwind'?'airImpact':'impact',x:b.x,y:b.y,radius:(CONFIG.impactRadius+CONFIG.chargedImpactBonus)*b.power},CONFIG.impactDuration);return false;
   }
   if(hit){
+   if(b.kind==='fire')explodeFire(s,b);
+   if(b.kind==='lightDisc'&&!b.returning){b.returning=true;b.distance=0;b.hitIds=[];return true;}
    if(b.kind!=='boulder'||b.ricochets>=EARTH_BALANCE.maxRicochets)return false;
    const vx=Math.cos(b.angle),vy=Math.sin(b.angle),dot=vx*hit.nx+vy*hit.ny;b.angle=Math.atan2(vy-2*dot*hit.ny,vx-2*dot*hit.nx);
    b.x+=hit.nx*EARTH_BALANCE.collisionEpsilon;b.y+=hit.ny*EARTH_BALANCE.collisionEpsilon;b.ricochets++;remaining-=travel;
   }else remaining=0;
  }
- if(b.distance>=b.range){effect(s,{kind:b.kind==='spark'?'sparkImpact':'impact',x:b.x,y:b.y,radius:CONFIG.expiryRadius*b.power},CONFIG.expiryDuration);return false;}
+ if(b.range-b.distance<=1e-7){if(b.kind==='lightDisc'&&!b.returning){b.returning=true;b.distance=0;b.hitIds=[];return true;}effect(s,{kind:b.kind==='spark'?'sparkImpact':'impact',x:b.x,y:b.y,radius:CONFIG.expiryRadius*b.power},CONFIG.expiryDuration);return false;}
  return true;
+}
+
+function explodeFire(s,b){
+ for(const target of victims(s,b.owner))if(Math.hypot(target.x-b.x,target.y-b.y)<=b.splashRadius+radiusOf(s,target))damage(s,target,b.splashDamage);
+ effect(s,{kind:'impact',x:b.x,y:b.y,radius:b.splashRadius},CONFIG.impactDuration);
+}
+
+function pullActor(s,actor,x,y,distance){const dx=x-actor.x,dy=y-actor.y,length=Math.hypot(dx,dy);if(length>1e-6)moveActor(s,actor,dx/length*Math.min(distance,length),dy/length*Math.min(distance,length),radiusOf(s,actor));}
+function homeShard(s,b,dt){
+ const angleDiff=a=>Math.atan2(Math.sin(a-b.angle),Math.cos(a-b.angle));
+ const target=(s.enemies??s.targets).filter(e=>(e.health??1)>0&&Math.hypot(e.x-b.x,e.y-b.y)<=b.homingRange&&Math.abs(angleDiff(Math.atan2(e.y-b.y,e.x-b.x)))<=b.homingAngle).sort((a,c)=>Math.hypot(a.x-b.x,a.y-b.y)-Math.hypot(c.x-b.x,c.y-b.y))[0];
+ if(target){const diff=angleDiff(Math.atan2(target.y-b.y,target.x-b.x));b.angle+=Math.max(-b.turnSpeed*dt,Math.min(b.turnSpeed*dt,diff));}
+}
+function tickFields(s,dt){
+ for(const e of s.effects){
+  if(e.kind==='gravityWell'){
+   for(const enemy of s.enemies??[])if(enemy.health>0&&Math.hypot(enemy.x-e.x,enemy.y-e.y)<=e.radius+radiusOf(s,enemy))pullActor(s,enemy,e.x,e.y,e.pullSpeed*dt);
+   e.tick-=Math.min(dt,e.life);while(e.tick<=0){for(const enemy of s.enemies??[])if(enemy.health>0&&Math.hypot(enemy.x-e.x,enemy.y-e.y)<=e.radius+radiusOf(s,enemy))damage(s,enemy,e.damage);e.tick+=e.tickInterval;}
+  }else if(e.kind==='crystalTrap'&&(s.enemies??[]).some(enemy=>enemy.health>0&&Math.hypot(enemy.x-e.x,enemy.y-e.y)<=e.radius+radiusOf(s,enemy))){
+   for(const target of victims(s,e.owner))if(Math.hypot(target.x-e.x,target.y-e.y)<=e.radius+radiusOf(s,target))damage(s,target,e.damage);
+   for(let i=0;i<e.shardCount;i++)s.projectiles.push({id:s.nextId++,owner:e.owner,kind:'crystalShard',child:true,x:e.x,y:e.y,angle:i/e.shardCount*Math.PI*2,speed:e.shardSpeed,range:e.shardRange,radius:e.shardRadius,distance:0,damage:e.damage*.25,power:1});
+   effect(s,{kind:'crystalImpact',x:e.x,y:e.y,radius:e.radius},CONFIG.impactDuration);e.life=0;
+  }
+ }
+}
+
+function dropPoint(s,p){
+ let best={x:p.x,y:p.y},bestDistance=-1;
+ for(const offset of [0,Math.PI/2,-Math.PI/2,Math.PI]){
+  const dx=Math.cos(p.angle+offset)*CONFIG.dropDistance,dy=Math.sin(p.angle+offset)*CONFIG.dropDistance;
+  const wall=wallTrace(s,p.x,p.y,dx,dy,CONFIG.playerRadius,true),edge=boundaryTrace(s,p.x,p.y,dx,dy,CONFIG.playerRadius);
+  const distance=Math.max(0,Math.min(wall?.t??1,edge?.t??1)-1e-5);
+  if(distance>bestDistance){best={x:p.x+dx*distance,y:p.y+dy*distance};bestDistance=distance;}
+  if(distance>.99)break;
+ }return best;
 }

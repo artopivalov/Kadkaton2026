@@ -1,3 +1,4 @@
+import {rarityColor} from './items.js';
 import {CONFIG,LOCATION_BALANCE,ENEMY_BALANCE,ENCOUNTER_BALANCE} from './balance.js';
 import {WANDS,lightningPoint} from './wands.js';
 import {getPlayer} from './simulation.js';
@@ -29,6 +30,9 @@ function renderProjectile(ctx,b){
   ctx.strokeStyle='#a4ffc9';ctx.lineWidth=3;for(let r=5;r<=b.radius;r+=6){circle(ctx,b.x,b.y,r);ctx.stroke();}
  }else if(b.kind==='boulder'){
   ctx.fillStyle='#9c8874';circle(ctx,b.x,b.y,b.radius);ctx.fill();ctx.strokeStyle='#e4c8a6';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(b.x-b.radius*.5,b.y);ctx.lineTo(b.x+b.radius*.3,b.y-b.radius*.5);ctx.stroke();
+ }else if(['thorn','gravityOrb','lightDisc','crystalShard'].includes(b.kind)){
+  ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.angle);const colors={thorn:'#75d779',gravityOrb:'#a59eff',lightDisc:'#fff7bd',crystalShard:'#f5a6ef'};ctx.fillStyle=colors[b.kind];ctx.strokeStyle=colors[b.kind];ctx.lineWidth=3;
+  if(b.kind==='lightDisc'||b.kind==='gravityOrb'){circle(ctx,0,0,b.radius);ctx.stroke();circle(ctx,0,0,b.radius*.5);ctx.fill();}else{ctx.beginPath();ctx.moveTo(b.radius*2,0);ctx.lineTo(-b.radius,-b.radius);ctx.lineTo(-b.radius,b.radius);ctx.closePath();ctx.fill();}ctx.restore();
  }else if(b.kind==='icicle'){
   ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.angle);ctx.fillStyle='#bceeff';ctx.beginPath();ctx.moveTo(b.radius*2,0);ctx.lineTo(-b.radius*2,-b.radius);ctx.lineTo(-b.radius*2,b.radius);ctx.fill();ctx.restore();
  }else if(b.kind==='coldWave'){
@@ -38,7 +42,10 @@ function renderProjectile(ctx,b){
 }
 function renderEffect(ctx,e){
  const alpha=e.life/e.duration;ctx.save();ctx.globalAlpha=alpha;
- if(e.kind==='lightningLine'){
+ if(['vines','gravityWell','crystalTrap'].includes(e.kind)){
+  const color={vines:'#75d779',gravityWell:'#a59eff',crystalTrap:'#f5a6ef'}[e.kind];ctx.globalAlpha=Math.min(1,alpha*4);ctx.fillStyle=color+'35';ctx.strokeStyle=color;ctx.lineWidth=3;circle(ctx,e.x,e.y,e.radius);ctx.fill();ctx.stroke();
+  if(e.kind==='gravityWell'){for(let r=15;r<e.radius;r+=28){circle(ctx,e.x,e.y,r);ctx.stroke();}}else if(e.kind==='vines'){for(let i=-2;i<=2;i++){ctx.beginPath();ctx.moveTo(e.x+i*25,e.y-e.radius*.65);ctx.lineTo(e.x+i*25+15,e.y);ctx.lineTo(e.x+i*25,e.y+e.radius*.65);ctx.stroke();}}else{ctx.translate(e.x,e.y);ctx.rotate(Math.PI/4);ctx.fillStyle=color;ctx.fillRect(-14,-14,28,28);}
+ }else if(e.kind==='lightningLine'){
   ctx.strokeStyle='#fffda2';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(e.x,e.y);ctx.lineTo(e.x2,e.y2);ctx.stroke();
  }else if(e.kind==='skyStrike'){
   ctx.fillStyle='#fff27940';circle(ctx,e.x,e.y,e.radius);ctx.fill();ctx.strokeStyle='#fffda2';ctx.lineWidth=7;
@@ -81,12 +88,13 @@ export function render(ctx,s,width,height,localId,view={}){
   ctx.fillStyle='#8e6372';ctx.fillRect(t.x-22,t.y-22,44,44);ctx.strokeStyle='#e8b4c4';ctx.lineWidth=3;ctx.strokeRect(t.x-12,t.y-12,24,24);
   ctx.fillStyle='#d9e3ec';ctx.fillText(`Hits: ${t.hits} · Damage: ${Math.round(t.damage*100)/100}`,t.x,t.y+44);
  }
- for(const wall of s.walls){ctx.fillStyle=wall.permanent?'#526475':'#8c7967';ctx.fillRect(wall.x,wall.y,wall.width,wall.height);ctx.strokeStyle='#decbb1';ctx.lineWidth=2;ctx.strokeRect(wall.x,wall.y,wall.width,wall.height);if(!wall.permanent){ctx.fillStyle='#fff';ctx.fillText(`${Math.ceil(wall.expiresAt-s.time)}s`,wall.x+wall.width/2,wall.y-8);}}
+ for(const wall of s.walls){ctx.fillStyle=wall.projectileOnly?'#fff7bd80':wall.permanent?'#526475':'#8c7967';ctx.fillRect(wall.x,wall.y,wall.width,wall.height);ctx.strokeStyle='#decbb1';ctx.lineWidth=2;ctx.strokeRect(wall.x,wall.y,wall.width,wall.height);if(!wall.permanent){ctx.fillStyle='#fff';ctx.fillText(`${Math.ceil(wall.expiresAt-s.time)}s`,wall.x+wall.width/2,wall.y-8);}}
  for(const portal of s.portals){ctx.strokeStyle='#a592ef';ctx.lineWidth=5;circle(ctx,portal.x,portal.y,35);ctx.stroke();ctx.fillStyle='#c4b7ff';ctx.fillText(portal.label,portal.x,portal.y+56);ctx.fillText(portal.available?'Enter together':'Not available yet',portal.x,portal.y+73);}
- for(const pedestal of s.pedestals){ctx.fillStyle='#44505f';ctx.fillRect(pedestal.x-26,pedestal.y-24,52,48);ctx.strokeStyle=WANDS[pedestal.type].color;ctx.lineWidth=3;ctx.strokeRect(pedestal.x-26,pedestal.y-24,52,48);wand(ctx,pedestal.x,pedestal.y,-.5,pedestal.type);ctx.fillStyle=WANDS[pedestal.type].color;ctx.fillText(WANDS[pedestal.type].name,pedestal.x,pedestal.y+43);}
- for(const i of s.items){if(i.kind==='rune'){ctx.fillStyle='#b69cff';ctx.fillRect(i.x-12,i.y-12,24,24);ctx.fillText(`${i.type} ×${i.factor}`,i.x,i.y+32);continue;}ctx.strokeStyle=WANDS[i.type].color;ctx.lineWidth=2;circle(ctx,i.x,i.y,26);ctx.stroke();wand(ctx,i.x,i.y,-.5,i.type);ctx.fillStyle=WANDS[i.type].color;ctx.fillText(WANDS[i.type].name,i.x,i.y+43);}
+ for(const pedestal of s.pedestals){ctx.fillStyle='#44505f';ctx.fillRect(pedestal.x-26,pedestal.y-24,52,48);ctx.strokeStyle=rarityColor({rarity:s.debugRarity});ctx.lineWidth=3;ctx.strokeRect(pedestal.x-26,pedestal.y-24,52,48);wand(ctx,pedestal.x,pedestal.y,-.5,pedestal.type);ctx.fillStyle=WANDS[pedestal.type].color;ctx.fillText(WANDS[pedestal.type].name,pedestal.x,pedestal.y+43);}
+ if(s.scene.id==='debug'&&s.runeStation){const r=s.runeStation;ctx.fillStyle='#b69cff';ctx.fillRect(r.x-25,r.y-25,50,50);ctx.strokeStyle=rarityColor({rarity:s.debugRarity});ctx.strokeRect(r.x-25,r.y-25,50,50);ctx.fillStyle='#fff';ctx.fillText('Random rune',r.x,r.y+48);}
+ for(const i of s.items){if(i.kind==='rune'){ctx.fillStyle='#b69cff';ctx.fillRect(i.x-12,i.y-12,24,24);ctx.strokeStyle=rarityColor(i);ctx.strokeRect(i.x-12,i.y-12,24,24);ctx.fillText(`${i.rarity??'Common'} rune`,i.x,i.y+32);continue;}ctx.strokeStyle=rarityColor(i);ctx.lineWidth=2;circle(ctx,i.x,i.y,26);ctx.stroke();wand(ctx,i.x,i.y,-.5,i.type);ctx.fillStyle=WANDS[i.type].color;ctx.fillText(WANDS[i.type].name,i.x,i.y+43);}
  for(const p of s.scene.viewer?[]:s.players){
-  ctx.globalAlpha=p.health<=0?.3:1;drawCharacter(ctx,p);ctx.globalAlpha=1;ctx.fillStyle='#fff';ctx.fillText(p.name,p.x,p.y+40);
+  ctx.globalAlpha=p.health<=0?.3:1;drawCharacter(ctx,p);ctx.globalAlpha=1;ctx.fillStyle='#fff';ctx.fillText(p.name,p.x,p.y+40);ctx.fillStyle='#36272c';ctx.fillRect(p.x-28,p.y-43,56,8);ctx.fillStyle='#65e299';ctx.fillRect(p.x-28,p.y-43,56*Math.max(0,p.health)/100,8);
   if(p.charge){
    ctx.strokeStyle=WANDS[p.wand.type].color;ctx.lineWidth=4;ctx.beginPath();ctx.arc(p.x,p.y,27,-Math.PI/2,-Math.PI/2+Math.PI*2*p.charge);ctx.stroke();
    if(p.wand.type==='lightning'&&p.mode==='Special'){

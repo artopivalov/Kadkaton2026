@@ -12,7 +12,7 @@ test('debug scene has every wand on permanent pedestals, no loose starting items
  const s=debugScene(profile);assert.equal(s.scene.id,'debug');assert.equal(s.items.length,0);
  assert.deepEqual(s.pedestals.map(p=>p.type).sort(),Object.keys(WANDS).sort());
  const pedestal=s.pedestals.find(p=>p.type==='earth');s.players[0].x=pedestal.x;s.players[0].y=pedestal.y;
- step(s,{1:{x:0,y:0}},.01);assert.equal(s.players[0].wand.type,'earth');assert.equal(s.pedestals.length,6);
+ step(s,{1:{x:0,y:0}},.01);assert.equal(s.players[0].wand.type,'earth');assert.equal(s.pedestals.length,Object.keys(WANDS).length);
  const id=s.players[0].wand.id;setMode(s,1,'Normal');step(s,{1:{x:0,y:0,held:true}},.1);
  assert.equal(s.players[0].wand.id,id);assert.ok(s.players[0].charge>0);
  dropWand(s,1);step(s,{1:{x:0,y:0}},.01);assert.equal(s.players[0].wand,null);

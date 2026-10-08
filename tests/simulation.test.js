@@ -1,13 +1,14 @@
 import {createTrainingState as createState} from './fixtures.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {ITEM_BALANCE} from '../src/balance.js';
 import {step,setMode,release,dropWand,CONFIG} from '../src/simulation.js';
 const profile={name:'Test',color:'#79a9ff'};
 test('Safe moves without charging or firing; Normal charges and fires on release',()=>{const s=createState(profile);step(s,{1:{x:1,y:0,held:true}},.1);assert.ok(s.players[0].x>600);release(s,1);assert.equal(s.shots,0);setMode(s,1,'Normal');step(s,{1:{x:0,y:-1,held:true}},.5);assert.ok(s.players[0].charge>0);release(s,1);assert.equal(s.shots,1);assert.equal(s.projectiles[0].owner,1);assert.equal(s.players[0].charge,0);});
 test('mode switch cancels charge and incomplete Special does not fire',()=>{const s=createState(profile);setMode(s,1,'Normal');step(s,{1:{x:1,y:0,held:true}},.1);setMode(s,1,'Special');assert.equal(s.players[0].charge,0);step(s,{1:{x:1,y:0,held:true}},.1);release(s,1);assert.equal(s.shots,0);});
 test('drop does not immediately re-equip; free slot auto-picks after delay',()=>{const s=createState(profile);const id=s.players[0].wand.id;assert.ok(dropWand(s,1));step(s,{1:{x:0,y:0}},.01);assert.equal(s.players[0].wand,null);const item=s.items.find(i=>i.id===id);s.players[0].x=item.x;s.players[0].y=item.y;step(s,{1:{x:0,y:0}},.1);assert.equal(s.players[0].wand,null);step(s,{1:{x:0,y:0}},1);assert.equal(s.players[0].wand.id,id);assert.ok(!s.items.some(i=>i.id===id));});
 test('occupied slot does not swap and empty hands cannot fire',()=>{const s=createState(profile);s.players[0].x=730;step(s,{1:{x:0,y:0}},1);assert.equal(s.players[0].wand.id,2);dropWand(s,1);setMode(s,1,'Normal');step(s,{1:{x:0,y:1,held:true}},.1);release(s,1);assert.equal(s.shots,0);});
-test('fireball hits a target once and expires at maximum range',()=>{const s=createState(profile);setMode(s,1,'Normal');s.players[0].angle=-Math.PI/2;s.players[0].charge=1;release(s,1);for(let i=0;i<120;i++)step(s,{1:{x:0,y:0}},1/60);assert.equal(s.targets[0].hits,1);assert.equal(s.projectiles.length,0);s.players[0].angle=0;s.players[0].charge=1;release(s,1);for(let i=0;i<180;i++)step(s,{1:{x:0,y:0}},1/60);assert.equal(s.projectiles.length,0);});
+test('fireball deals direct and splash damage and expires at maximum range',()=>{const s=createState(profile);setMode(s,1,'Normal');s.players[0].angle=-Math.PI/2;s.players[0].charge=1;release(s,1);for(let i=0;i<120;i++)step(s,{1:{x:0,y:0}},1/60);assert.equal(s.targets[0].hits,2);assert.equal(s.projectiles.length,0);s.players[0].angle=0;s.players[0].charge=1;release(s,1);for(let i=0;i<180;i++)step(s,{1:{x:0,y:0}},1/60);assert.equal(s.projectiles.length,0);});
 test('diagonal movement is normalized and world boundaries hold',()=>{const s=createState(profile);step(s,{1:{x:1,y:1,held:true}},1);assert.ok(Math.abs(Math.hypot(s.players[0].x-600,s.players[0].y-450)-CONFIG.speed)<.001);step(s,{1:{x:1,y:1,held:true}},100);assert.ok(s.players[0].x<=1180&&s.players[0].y<=880);});
 
 test('Special charges slower and full release damages all nearby dummies once',()=>{
@@ -46,7 +47,7 @@ test('partial Normal charge reduces actual damage and range; full charge keeps m
   const projectile={...s.projectiles[0]};shots.push(projectile);
   s.targets=[{id:4,x:projectile.x+projectile.range*.5,y:450,hits:0,damage:0}];
   for(let i=0;i<60;i++)step(s,{1:{x:0,y:0,held:false}},1/60);
-  assert.equal(s.targets[0].hits,1);assert.equal(s.targets[0].damage,projectile.damage);
+  assert.equal(s.targets[0].hits,2);assert.equal(s.targets[0].damage,projectile.damage+projectile.splashDamage);
  }
  assert.ok(shots[0].range<shots[1].range&&shots[1].range<shots[2].range);
  assert.ok(shots[0].damage<shots[1].damage&&shots[1].damage<shots[2].damage);
@@ -56,7 +57,7 @@ test('short shot expires before distant target even with a long simulation step'
  const s=createState(profile);setMode(s,1,'Normal');s.players[0].angle=0;s.players[0].charge=.25;release(s,1);
  const projectile=s.projectiles[0];
  s.targets=[{id:4,x:projectile.x+projectile.range+CONFIG.targetRadius+projectile.radius+1,y:projectile.y,hits:0,damage:0}];
- const endpoint=projectile.x+projectile.range;step(s,{1:{x:0,y:0,held:false}},1);
+ const endpoint=projectile.x+Math.cos(projectile.angle)*projectile.range;step(s,{1:{x:0,y:0,held:false}},1);
  assert.equal(s.targets[0].hits,0);assert.equal(s.projectiles.length,0);assert.equal(projectile.x,endpoint);
 });
 test('Safe and empty hands never charge while held',()=>{

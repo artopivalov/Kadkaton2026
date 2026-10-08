@@ -48,7 +48,7 @@ test('runes share single pickup ownership and modify actual charged projectile d
  p.wand={id:201,type:'fire'};p.mode='Normal';p.charge=1;release(s,p.id);assert.equal(s.projectiles[0].damage,12.5);
 });
 test('lobby portal waits for the entire group and location starts with a reachable combat wand',()=>{
- const s=lobby(profile);addPlayer(s,profile);const portal=s.portals[0];s.players[0].x=portal.x;s.players[0].y=portal.y;step(s,{},.01);assert.equal(readyPortal(s),null);s.players[1].x=portal.x;s.players[1].y=portal.y;step(s,{},.01);assert.equal(readyPortal(s).location,'forest');enterLocation(s,'forest',2);assert.equal(s.players[0].wand.type,'test');assert.ok(s.items.some(i=>i.type==='fire'&&onFloor(s.map,i.x,i.y,20)));
+ const s=lobby(profile);addPlayer(s,profile);const portal=s.portals[0];s.players[0].x=portal.x;s.players[0].y=portal.y;step(s,{},.01);assert.equal(readyPortal(s),null);s.players[1].x=portal.x;s.players[1].y=portal.y;step(s,{},.01);assert.equal(readyPortal(s).location,'forest');enterLocation(s,'forest',2);assert.ok(s.players.every(p=>p.wand.type!=='test'));assert.ok(s.items.some(i=>i.type==='fire'&&onFloor(s.map,i.x,i.y,20)));
 });
 test('charged combat spells kill enemies, unlock arenas and allow a complete solo run',()=>{
  const s=level(),p=s.players[0],enemy=s.enemies.find(e=>e.type==='skeleton');s.enemies=[enemy];enemy.x=p.x;enemy.y=p.y-80;enemy.health=1;p.wand={id:901,type:'fire'};p.mode='Normal';p.charge=1;p.angle=-Math.PI/2;release(s,p.id);for(let i=0;i<30;i++)step(s,{},1/60);assert.equal(s.enemies.length,0);

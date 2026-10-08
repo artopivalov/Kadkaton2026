@@ -57,4 +57,21 @@ export const ENEMY_BALANCE={
  goblinBoss:{name:'Goblin boss',health:320,damage:16,speed:45,radius:44,range:650,cooldown:3.6,boss:true},
  orcBoss:{name:'Orc boss',health:480,damage:22,speed:40,radius:50,range:700,cooldown:3.2,boss:true}
 };
-export const ENCOUNTER_BALANCE={partyHealth:.6,partyDamage:.15,progressHealth:.8,progressDamage:.4,activationDistance:750,telegraphDelay:1.8,bulletSpeed:220,bulletCount:16,coneCount:9,coneAngle:1.1,areaRadius:150,bulletRange:420,puzzlePlateRadius:32,chestRadius:55,corridorBase:1,combatBase:3};
+export const ENCOUNTER_BALANCE={partyHealth:.6,partyDamage:.15,progressHealth:.8,progressDamage:.4,activationDistance:375,telegraphDelay:1.8,bulletSpeed:220,bulletCount:16,coneCount:9,coneAngle:1.1,areaRadius:150,bulletRange:420,puzzlePlateRadius:32,chestRadius:55,corridorBase:1,combatBase:3};
+
+// Temporary values for the new shared item model and playtest geometry.
+export const MAP_BALANCE={arenaRadius:360,corridorRadius:180,spacing:1100,branchStep:1100};
+export const ITEM_BALANCE={
+ stats:['damage','range','size','speed','chargeTime','spread','manaCost'],
+ inverse:['chargeTime','spread','manaCost'],negativeChance:.2,minPenalty:.01,maxPenalty:.2,minBonus:.01,maxBonus:.25,
+ damageBonus:[0,.2,.4,.65,1],extraStats:[0,0,1,2,3],wandBonus:.2,
+ rareChanceStart:.02,rareChanceEnd:.12,normalMana:2,specialMana:20,
+ spreadStart:.12,spreadMin:.015,splashRadius:48,splashDamage:.65,
+ debugWidth:1400,debugHeight:1100
+};
+export const RARITIES=['Common','Uncommon','Rare','Epic','Legendary'];
+export const RARITY_COLORS=['#ffffff','#69d68a','#69aaff','#bd83ff','#ffe168'];
+export const NATURE_BALANCE={chargeTime:1.2,specialChargeTime:2.8,projectileSpeed:360,projectileRange:520,projectileRadius:5,chargedRadiusBonus:5,normalDamage:14,rootDuration:1.3,patchDistance:150,patchRadius:120,patchDuration:5,slowFactor:.35};
+export const GRAVITY_BALANCE={chargeTime:1.3,specialChargeTime:3,projectileSpeed:300,projectileRange:550,projectileRadius:7,chargedRadiusBonus:6,normalDamage:12,pullRadius:110,normalPull:70,wellDistance:180,wellRadius:150,wellDamage:7,wellDuration:4,pullSpeed:100,tickInterval:.5};
+export const LIGHT_BALANCE={chargeTime:1.1,specialChargeTime:2.6,projectileSpeed:400,projectileRange:420,projectileRadius:8,chargedRadiusBonus:5,normalDamage:14,wallDistance:110,wallLength:220,wallThickness:20,wallDuration:5};
+export const CRYSTAL_BALANCE={chargeTime:1.2,specialChargeTime:2.8,projectileSpeed:370,projectileRange:520,projectileRadius:5,chargedRadiusBonus:5,normalDamage:16,homingRange:220,homingAngle:.55,turnSpeed:1.2,childDamage:.4,childAngle:.32,trapDistance:160,trapRadius:100,trapDuration:8,trapDamage:28,shardCount:8};

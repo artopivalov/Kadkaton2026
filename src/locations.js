@@ -1,3 +1,4 @@
+import {createWand,combatWands,rollRarity} from './items.js';
 import {generateLocation,routeTo} from './generator.js';
 import {LOCATION_BALANCE,ENEMY_BALANCE,ENCOUNTER_BALANCE,PLAYER_BALANCE} from './balance.js';
 import {createRandom} from './rng.js';
@@ -5,7 +6,7 @@ export function enterLocation(s,location,seed=s.seed+1,{viewer=false}={}){
  const map=generateLocation(location,seed,Math.max(1,s.players.length));s.seed=seed>>>0;s.rngState=s.seed;s.map=map;s.world=map.world;s.spawn=map.spawn;
  s.scene={id:location,title:`${LOCATION_BALANCE[location].name}${viewer?' · Generation viewer':''}`,description:viewer?'Free camera · choose a seed and regenerate':'Clear arenas, solve plates in order, and open shared chests.',viewer};
  s.walls=[];s.targets=[];s.pedestals=[];s.portals=[];s.items=[];s.effects=[];s.projectiles=[];s.enemies=[];s.telegraphs=[];s.completed=false;
- for(const [i,p] of s.players.entries()){p.x=map.spawn.x+[0,1,-1][i%3]*45;p.y=map.spawn.y+Math.floor(i/3)*40;p.health=PLAYER_BALANCE.health;p.mana=PLAYER_BALANCE.mana;p.charge=0;p.nearPortal=null;}
+ for(const [i,p] of s.players.entries()){p.x=map.spawn.x+[0,1,-1][i%3]*45;p.y=map.spawn.y+Math.floor(i/3)*40;p.health=PLAYER_BALANCE.health;p.mana=PLAYER_BALANCE.mana;p.charge=0;p.nearPortal=null;p.activePedestal=null;p.activeRuneStation=null;p.wand={id:s.nextId++,...createWand(combatWands[Math.floor(createRandom(seed+i+77)()*combatWands.length)],rollRarity(createRandom(seed+i+99),location,0),createRandom(seed+i+101))};}
  const random=createRandom(seed^0xabc123),config=LOCATION_BALANCE[location];
  function spawn(type,x,y,poi,progress){const b=ENEMY_BALANCE[type],party=Math.max(0,map.partySize-1),health=b.health*(1+party*ENCOUNTER_BALANCE.partyHealth)*(1+progress*ENCOUNTER_BALANCE.progressHealth);s.enemies.push({id:s.nextId++,type,x,y,home:{x,y},poi,health,maxHealth:health,attackDamage:b.damage*(1+party*ENCOUNTER_BALANCE.partyDamage)*(1+progress*ENCOUNTER_BALANCE.progressDamage),hits:0,damage:0,cooldown:1,pattern:0,angle:0});}
  for(const poi of map.pois){
@@ -25,7 +26,7 @@ export function tickEncounters(s,dt,{move,damage,trace}){
   const player=living.reduce((best,p)=>!best||Math.hypot(p.x-enemy.x,p.y-enemy.y)<Math.hypot(best.x-enemy.x,best.y-enemy.y)?p:best,null);if(!player)continue;
   const dx=player.x-enemy.x,dy=player.y-enemy.y,distance=Math.hypot(dx,dy);if(distance>b.activationDistance)continue;
   enemy.angle=Math.atan2(dy,dx);
-  if(distance>def.range*.8){let waypoint=player;if(trace(s,enemy.x,enemy.y,dx,dy,def.radius)){enemy.path??=routeTo(s.map,enemy,player);while(enemy.path.length>1&&Math.hypot(enemy.path[0].x-enemy.x,enemy.path[0].y-enemy.y)<35)enemy.path.shift();waypoint=enemy.path[0];}else delete enemy.path;const mx=waypoint.x-enemy.x,my=waypoint.y-enemy.y,length=Math.hypot(mx,my)||1;move(s,enemy,mx/length*def.speed*dt,my/length*def.speed*dt,def.radius);}
+  if(distance>def.range*.8){let waypoint=player;if(trace(s,enemy.x,enemy.y,dx,dy,def.radius,true)){enemy.path??=routeTo(s.map,enemy,player);while(enemy.path.length>1&&Math.hypot(enemy.path[0].x-enemy.x,enemy.path[0].y-enemy.y)<35)enemy.path.shift();waypoint=enemy.path[0];}else delete enemy.path;const mx=waypoint.x-enemy.x,my=waypoint.y-enemy.y,length=Math.hypot(mx,my)||1;move(s,enemy,mx/length*def.speed*dt,my/length*def.speed*dt,def.radius);}
   if(enemy.cooldown>0||distance>def.range)continue;enemy.cooldown=def.cooldown;
   if(def.boss){const pattern=enemy.pattern++%3;s.telegraphs.push({id:s.nextId++,owner:enemy.id,kind:['ring','cone','area'][pattern],x:pattern===2?player.x:enemy.x,y:pattern===2?player.y:enemy.y,angle:enemy.angle,radius:pattern===2?b.areaRadius:b.bulletRange,delay:b.telegraphDelay,damage:enemy.attackDamage});}
   else if(def.projectileSpeed){if(!trace(s,enemy.x,enemy.y,dx,dy,0))s.projectiles.push({id:s.nextId++,enemy:true,owner:enemy.id,kind:'arrow',x:enemy.x,y:enemy.y,angle:enemy.angle,speed:def.projectileSpeed,range:def.range+150,radius:5,distance:0,power:1,damage:enemy.attackDamage});}
@@ -47,5 +48,5 @@ export function tickEncounters(s,dt,{move,damage,trace}){
    poi.opened=true;poi.loot.forEach((item,i)=>s.items.push({...item,id:s.nextId++,x:poi.x+(i?45:-45),y:poi.y-75,availableAt:s.time}));
   }
  }
- if(s.map.pois.every(p=>p.completed)){s.completed=true;if(!s.portals.length)s.portals.push({id:s.nextId++,x:s.map.pois[s.map.bossPoi].x,y:s.map.pois[s.map.bossPoi].y-120,label:'Return to lobby',location:'lobby',available:true});}
+ if(!s.enemies.some(e=>e.poi===s.map.bossPoi)){s.completed=true;if(!s.portals.length)s.portals.push({id:s.nextId++,x:s.map.pois[s.map.bossPoi].x,y:s.map.pois[s.map.bossPoi].y-120,label:'Return to lobby',location:'lobby',available:true});}
 }

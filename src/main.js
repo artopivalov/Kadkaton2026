@@ -1,3 +1,5 @@
+import {RARITIES} from './balance.js';
+import {rarityColor,runeLabel} from './items.js';
 import {enterLocation} from './locations.js';
 import {configureLobby} from './scenes/lobby.js';
 import {CAMERA_BALANCE} from './balance.js';
@@ -11,21 +13,22 @@ let view={zoom:CAMERA_BALANCE.default},targetZoom=CAMERA_BALANCE.default;
 let state=null,localId=null,pending=[],accumulator=0,activePointer=null,vector={x:0,y:0},keys=new Set(),lastTime=0,noticeUntil=0;
 try{const profile=JSON.parse(localStorage.getItem('kadkaton.profile'));if(profile){$('#name').value=String(profile.name||'').slice(0,24);if(/^#[0-9a-f]{6}$/i.test(profile.color))$('#color').value=profile.color;}}catch{}
 function notice(message){$('#notice').textContent=message;noticeUntil=performance.now()+2300;}
-function clearInput(){activePointer=null;modePointer=null;vector={x:0,y:0};keys.clear();stick.style.transform='';pending.length=0;if(state)pending.push({type:'cancel'});}
+function clearInput(){activePointer=null;modePointer=null;vector={x:0,y:0};keys.clear();stick.style.transform='';joystick.hidden=true;pending.length=0;if(state)pending.push({type:'cancel'});}
 const modeNames=['Safe','Normal','Special'];
 const TICK=1/60;
 const me=()=>getPlayer(state,localId);
 const modeSlider=$('#mode-slider');
 function wandIcon(type){const color=WANDS[type].color;const tip=type==='lightning'?`<path d="m31 3-9 14h7l-6 13 14-18h-8Z" fill="${color}"/>`:type==='ice'?`<path d="m30 3 7 12-7 8-7-8Z" fill="${color}"/>`:`<circle cx="30" cy="10" r="6" fill="${color}"/>`;return `<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M9 32 29 12" stroke="#d8b97e" stroke-width="5"/>${tip}</svg>`;}
 function updateUI(){
- const p=me();if(!p)return;$('#vitals').textContent=`Health ${Math.ceil(p.health)} · Mana ${Math.floor(p.mana)}`;$('#retry').hidden=state.scene.viewer||(p.health>0&&!state.completed);if(state.map)$('#vitals').textContent+=` · POI ${state.map.pois.filter(p=>p.completed).length}/${state.map.pois.length}${state.completed?' · Victory!':''}`;$('#rune-slot').innerHTML=`<span>◇</span><small>${p.rune?`${p.rune.type} ×${p.rune.factor}`:'Empty rune'}</small>`;$('#rune-slot').disabled=!p.rune;$('#rune-slot').setAttribute('aria-label',p.rune?`${p.rune.type} rune: tap to drop`:'Rune slot: empty');$('#player-name').textContent=p.name;$('#charge').value=p.charge;
+ const p=me();if(!p)return;$('#vitals').textContent=`Health ${Math.ceil(p.health)} · Mana ${Math.floor(p.mana)}`;$('#retry').hidden=state.scene.viewer||(p.health>0&&!state.completed);if(state.map)$('#vitals').textContent+=` · POI ${state.map.pois.filter(p=>p.completed).length}/${state.map.pois.length}${state.completed?' · Victory!':''}`;const runeHTML=`<span>◇</span><small>${p.rune?`${p.rune.rarity??'Common'} rune`:'Empty rune'}</small>`;if($('#rune-slot').innerHTML!==runeHTML)$('#rune-slot').innerHTML=runeHTML;$('#rune-slot').disabled=!p.rune;$('#rune-slot').setAttribute('aria-label',p.rune?`${p.rune.rarity??"Common"} ${runeLabel(p.rune)} rune: tap to drop`:'Rune slot: empty');$('#player-name').textContent=p.name;$('#charge').value=p.charge;
+ $('#health-bar').value=p.health;$('#health-bar').max=100;$('#wand-slot').style.borderColor=rarityColor(p.wand);$('#rune-slot').style.borderColor=rarityColor(p.rune);$('#rune-info').textContent=p.rune?`${p.rune.rarity??'Common'} rune · ${runeLabel(p.rune)}`:'';$('#rune-info').hidden=!p.rune;$('#rune-slot').title=p.rune?`${p.rune.rarity??'Common'} · ${runeLabel(p.rune)}`:'';
  const definition=p.wand?WANDS[p.wand.type]:null;
  const wandName=definition?(definition.name.endsWith('Wand')?definition.name:`${definition.name} wand`):'';
  const slotHTML=(p.wand?wandIcon(p.wand.type):'<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M9 32 29 12" stroke="#78889e" stroke-width="5"/></svg>')+`<small>${definition?definition.name:'Empty wand'}</small>`;
  if($('#wand-slot').innerHTML!==slotHTML)$('#wand-slot').innerHTML=slotHTML;
  $('#wand-slot').disabled=!p.wand;
  $('#wand-slot').setAttribute('aria-label',p.wand?`${wandName}: tap to drop`:'Wand slot: empty, auto-pickup');
- $('#wand-slot').title=p.wand?`Drop ${wandName}`:'Move close to a wand to pick it up';
+ $('#wand-slot').title=p.wand?`Drop ${p.wand.rarity??'Common'} ${wandName}`:'Move close to a wand to pick it up';
  const modeIndex=modeNames.indexOf(p.mode);
  modeSlider.setAttribute('aria-valuenow',modeIndex);modeSlider.setAttribute('aria-valuetext',p.mode);
  $('#mode-thumb').style.top=`${(2-modeIndex)*56+6}px`;
@@ -52,23 +55,21 @@ $('#exit').addEventListener('click',()=>{clearInput();state=null;localId=null;ga
 $('#wand-slot').addEventListener('click',()=>{if(me()?.wand){pending.push({type:'drop'});notice('Wand dropped. Move close to pick it up.');}});
 $('#rune-slot').addEventListener('click',()=>{if(me()?.rune)pending.push({type:'dropRune'});});
 $('#zoom').addEventListener('input',()=>{targetZoom=Number($('#zoom').value);});
-function syncScene(){game.classList.toggle('viewer',Boolean(state.scene.viewer));$('#generation-tools').hidden=!state.scene.viewer;$('#scene-title').textContent=state.scene.title;game.setAttribute('aria-label',state.scene.title);canvas.setAttribute('aria-label',state.scene.title);if(state.scene.viewer){view.x=state.spawn.x;view.y=state.spawn.y;$('#map-stats').textContent=`${state.map.pois.length} POI · ${state.enemies.length} enemies · Seed ${state.seed}`;}else{delete view.x;delete view.y;}clearInput();}
+$('#rarity').innerHTML=RARITIES.map(r=>`<option>${r}</option>`).join('');
+$('#rarity').addEventListener('change',()=>pending.push({type:'setRarity',rarity:$('#rarity').value}));
+function syncScene(){$('#debug-tools').hidden=state.scene.id!=='debug';game.classList.toggle('viewer',Boolean(state.scene.viewer));$('#generation-tools').hidden=!state.scene.viewer;$('#scene-title').textContent=state.scene.title;game.setAttribute('aria-label',state.scene.title);canvas.setAttribute('aria-label',state.scene.title);if(state.scene.viewer){view.x=state.spawn.x;view.y=state.spawn.y;$('#map-stats').textContent=`${state.map.pois.length} POI · ${state.enemies.length} enemies · Seed ${state.seed}`;}else{delete view.x;delete view.y;}clearInput();}
 $('#regenerate').addEventListener('click',()=>{enterLocation(state,$('#location').value,Number($('#seed').value)>>>0,{viewer:true});syncScene();});
 $('#retry').addEventListener('click',()=>{configureLobby(state);syncScene();notice('Choose another adventure.');});
-function position(event){const r=joystick.getBoundingClientRect();const x=event.clientX-r.left-r.width/2,y=event.clientY-r.top-r.height/2;const length=Math.hypot(x,y),radius=42;const ratio=length>radius?radius/length:1;vector={x:x*ratio/radius,y:y*ratio/radius};stick.style.transform=`translate(${vector.x*radius}px,${vector.y*radius}px)`;}
-// A held gameplay pointer charges independently of its movement vector.
-for(const surface of [joystick,canvas]){
- surface.addEventListener('pointerdown',event=>{
-  if(activePointer!==null)return;event.preventDefault();activePointer=event.pointerId;
-  surface.setPointerCapture(event.pointerId);
-  if(surface===joystick)position(event);else vector={x:0,y:0};
- });
- surface.addEventListener('pointermove',event=>{if(event.pointerId===activePointer&&surface===joystick)position(event);});
- surface.addEventListener('pointerup',event=>{
-  if(event.pointerId!==activePointer)return;activePointer=null;vector={x:0,y:0};stick.style.transform='';if(state)pending.push({type:'release'});
- });
- for(const type of ['pointercancel','lostpointercapture'])surface.addEventListener(type,event=>{if(event.pointerId===activePointer)clearInput();});
-}
+function position(event){const x=event.clientX-gestureOrigin.x,y=event.clientY-gestureOrigin.y;const length=Math.hypot(x,y),radius=42;const ratio=length>radius?radius/length:1;vector={x:x*ratio/radius,y:y*ratio/radius};stick.style.transform=`translate(${vector.x*radius}px,${vector.y*radius}px)`;}
+let gestureOrigin={x:0,y:0};
+// Only the canvas starts a gesture; UI owns its own pointer events.
+canvas.addEventListener('pointerdown',event=>{
+ if(activePointer!==null)return;event.preventDefault();activePointer=event.pointerId;canvas.setPointerCapture(event.pointerId);
+ gestureOrigin={x:event.clientX,y:event.clientY};const rect=game.getBoundingClientRect();joystick.style.left=`${event.clientX-rect.left}px`;joystick.style.top=`${event.clientY-rect.top}px`;joystick.hidden=false;vector={x:0,y:0};stick.style.transform='';
+});
+canvas.addEventListener('pointermove',event=>{if(event.pointerId===activePointer)position(event);});
+canvas.addEventListener('pointerup',event=>{if(event.pointerId!==activePointer)return;activePointer=null;vector={x:0,y:0};stick.style.transform='';joystick.hidden=true;if(state)pending.push({type:'release'});});
+for(const type of ['pointercancel','lostpointercapture'])canvas.addEventListener(type,event=>{if(event.pointerId===activePointer)clearInput();});
 const movementKeys=new Set(['w','a','s','d','arrowup','arrowleft','arrowdown','arrowright']);
 function keyboardVector(){return {x:Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft')),y:Number(keys.has('s')||keys.has('arrowdown'))-Number(keys.has('w')||keys.has('arrowup'))};}
 window.addEventListener('keydown',event=>{const k=event.key.toLowerCase();if(!state||!movementKeys.has(k)||event.target===modeSlider||/INPUT|TEXTAREA|SELECT/.test(event.target.tagName))return;event.preventDefault();keys.add(k);});

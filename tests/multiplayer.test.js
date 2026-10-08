@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createState,addPlayer,removePlayer,getPlayer,step,release,applyCommand,readyPortal,createRandom,nextRandom} from '../src/simulation.js';
 import {createScene as debugScene} from '../src/scenes/debug.js';
 import {createScene as lobbyScene} from '../src/scenes/lobby.js';
-import {PVP_BALANCE,CONFIG,SCENE_BALANCE} from '../src/balance.js';
+import {ITEM_BALANCE,PVP_BALANCE,CONFIG,SCENE_BALANCE} from '../src/balance.js';
 const profile=(name)=>({name,color:'#79a9ff'});
 function duel(type='fire'){
  const s=createState();const a=addPlayer(s,profile('A')),b=addPlayer(s,profile('B'));
@@ -31,7 +31,7 @@ test('release command is applied inside the tick, before charging continues',()=
 test('friendly fire deals half damage to another player and never hits the attacker',()=>{
  const {s,a,b}=duel();applyCommand(s,a.id,{type:'setMode',mode:'Normal'});a.charge=1;release(s,a.id);
  for(let i=0;i<60;i++)step(s,{},1/60);
- assert.equal(b.hits,1);assert.equal(b.damage,CONFIG.normalDamage*PVP_BALANCE.friendlyFireMultiplier);assert.equal(a.hits,0);assert.equal(a.damage,0);
+ assert.equal(b.hits,2);assert.equal(b.damage,CONFIG.normalDamage*(1+ITEM_BALANCE.splashDamage)*PVP_BALANCE.friendlyFireMultiplier);assert.equal(a.hits,0);assert.equal(a.damage,0);
  // A fire sphere reaches the other player but not its caster.
  const sphere=duel();applyCommand(sphere.s,sphere.a.id,{type:'setMode',mode:'Special'});sphere.a.charge=1;release(sphere.s,sphere.a.id);
  assert.equal(sphere.b.damage,CONFIG.specialDamage/2);assert.equal(sphere.a.damage,0);
