@@ -1,0 +1,45 @@
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;background:#121720;color:#e6ecf5;font:16px system-ui,sans-serif}
+button,input{font:inherit}
+button{cursor:pointer;color:inherit;background:#293449;border:1px solid #64748b;border-radius:8px;padding:12px;min-height:44px}
+button:hover{background:#354561}
+button:focus-visible,input:focus-visible,summary:focus-visible,[role=slider]:focus-visible{outline:3px solid #ffc36b;outline-offset:3px}
+button[aria-disabled=true]{opacity:.5;cursor:default}
+.menu{max-width:380px;margin:0 auto;padding:3vh 24px}
+.menu h1{font-size:38px;margin-bottom:0}
+.menu p,.menu small{color:#aebdd0}
+.menu form{display:grid;gap:12px;margin:12px 0 24px}
+.menu input{min-width:0;width:100%;padding:10px;border:1px solid #64748b;border-radius:8px;background:#202a39;color:#fff}
+.menu input[type=color]{height:48px;padding:4px}
+#character-preview{display:block;width:160px;height:110px;margin:auto;background:#202a32;border-radius:12px}
+#game{position:relative;width:min(100vw,calc(100dvh * 9 / 16));height:100dvh;margin:auto;overflow:hidden;touch-action:none;background:#202a32}
+body:has(#game:not([hidden])){display:flex;align-items:center}
+#game[hidden]{display:none}
+#canvas{display:block;width:100%;height:100%}
+.hud{position:absolute;top:12px;left:12px;right:12px;display:flex;align-items:start;justify-content:space-between;gap:8px}
+.hud strong,.hud span{display:block}
+.hud span{font-size:12px;color:#b8c6d5;max-width:170px}
+.spell-status{position:absolute;top:72px;left:12px;right:12px;pointer-events:none}
+.spell-status p{font-size:12px;margin:0 0 6px;background:#121720d9;padding:6px;border-radius:4px}
+progress{display:block;width:100%;height:8px;accent-color:#ffad45}
+.controls{position:absolute;bottom:max(48px,env(safe-area-inset-bottom));left:12px;right:12px;height:156px;pointer-events:none}
+#mode-slider{position:absolute;left:0;bottom:0;width:88px;height:156px;background:#152030dd;border:1px solid #64748b;border-radius:10px;touch-action:none;pointer-events:auto;user-select:none;cursor:ns-resize}
+.mode-track{position:absolute;left:18px;top:22px;bottom:22px;width:4px;background:#75849b;border-radius:4px}
+#mode-thumb{position:absolute;left:5px;top:118px;width:30px;height:30px;border-radius:50%;border:2px solid #ffe0a0;background:#df9c40;pointer-events:none}
+.mode-label{position:absolute;left:36px;font-size:11px;line-height:32px;color:#b2c2d5;pointer-events:none}
+.mode-label.special{top:6px}.mode-label.normal{top:62px}.mode-label.safe{top:118px}
+.mode-label.active{color:#ffe0a0;font-weight:bold}
+#joystick{position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:132px;height:132px;background:#9fb5cf20;border:2px solid #9fb5cf70;border-radius:50%;touch-action:none;pointer-events:auto;user-select:none}
+#stick{width:52px;height:52px;background:#a5b8d6b0;border:2px solid #d8e7ff;border-radius:50%;position:absolute;left:calc(50% - 26px);top:calc(50% - 26px);pointer-events:none}
+.inventory{position:absolute;right:0;bottom:0;display:flex;flex-direction:column;gap:8px;pointer-events:auto}
+#wand-slot,.empty-slot{display:flex;flex-direction:column;align-items:center;justify-content:center;width:68px;height:68px;text-align:center;background:#1c2638e8;border:1px solid #78889e;border-radius:8px;padding:4px}
+.inventory svg{display:block;width:34px;height:34px}
+.inventory small{font-size:10px;line-height:14px}
+.empty-slot{opacity:.65}
+#wand-slot:disabled{opacity:.5;cursor:default}
+.instructions{position:absolute;bottom:8px;left:12px;right:12px;font-size:11px;background:#111923ed;border-radius:6px;padding:5px 8px;z-index:2}
+.instructions p{line-height:1.5;max-height:55dvh;overflow:auto;touch-action:pan-y}
+.instructions summary{cursor:pointer;min-height:22px}
+#notice{position:absolute;left:10%;right:10%;top:36%;text-align:center;pointer-events:none;color:#ffe0a0;text-shadow:0 2px 4px #000;font-size:13px}
+@media(max-aspect-ratio:3/4){#game{width:100vw;height:100dvh}}
+@media(max-width:360px),(max-height:640px){#joystick{width:108px;height:108px}#mode-slider{width:80px}.mode-label{font-size:10px}#wand-slot,.empty-slot{width:60px;height:60px}.inventory{gap:6px}.hud strong{font-size:14px}.hud span{font-size:11px}.hud button{padding:8px}}

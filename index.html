@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Kadkaton — prototype</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<main id="menu" class="menu">
+<h1>Kadkaton</h1><p>Lobby prototype · 2D</p>
+<canvas id="character-preview" width="160" height="110" role="img" aria-label="Character preview"></canvas>
+<form id="start-form">
+<label for="name">Wizard name</label><input id="name" maxlength="24" placeholder="Wizard" autocomplete="nickname">
+<label for="color">Character color</label><input id="color" type="color" value="#79a9ff">
+<button type="submit">Start game</button>
+<button type="button" aria-disabled="true">Host game</button>
+<button type="button" aria-disabled="true">Join game</button>
+</form><small>Hosting and joining are not available yet.</small>
+</main>
+<section id="game" hidden aria-label="Lobby">
+<canvas id="canvas" aria-label="Lobby with a wizard, wands and training dummies"></canvas>
+<header class="hud"><div><strong id="player-name"></strong><span>Lobby · training dummies</span></div><button id="exit">Menu</button></header>
+<div class="spell-status"><p id="mode-help"></p><progress id="charge" max="1" value="0" aria-label="Spell charge"></progress></div>
+<div id="notice" role="status" aria-live="polite"></div>
+<div class="controls">
+<div id="mode-slider" role="slider" tabindex="0" aria-label="Wand mode" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="2" aria-valuenow="0" aria-valuetext="Safe">
+<div class="mode-track"></div><div id="mode-thumb"></div><span class="mode-label special">Special</span><span class="mode-label normal">Normal</span><span class="mode-label safe">Safe</span>
+</div>
+<div id="joystick" role="application" aria-label="Movement and charging joystick"><div id="stick"></div></div>
+<div class="inventory"><button id="wand-slot"></button><div class="empty-slot" role="img" aria-label="Rune slot: empty"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 5 32 20 20 35 8 20Z" fill="none" stroke="currentColor" stroke-width="3"/></svg><small>Empty rune</small></div></div>
+</div>
+<details class="instructions"><summary>Controls and prototype rules</summary><p>Move with the joystick, WASD or arrow keys. Safe never fires. Normal: hold a direction to move and charge; release to cast a fireball. Special: hold longer until fully charged, then release to cast a fire sphere around the wizard. Releasing early cancels Special. On keyboard, release the last movement key to cast. Tap the wand slot to drop it; move close with an empty slot to pick it up. Swipe the mode slider up or down: Safe at the bottom, Normal in the middle, Special at the top. Arrow keys also work when the slider is focused. Changing mode cancels charge. Release gestures and balance values are provisional. Self-damage and mana rules are not defined yet.</p></details>
+</section>
+<script type="module" src="src/main.js"></script>
+</body></html>
