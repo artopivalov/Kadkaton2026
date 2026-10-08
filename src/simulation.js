@@ -1,94 +1,142 @@
-import {CONFIG,ICE_BALANCE,LIGHTNING_BALANCE,AIR_BALANCE,EARTH_BALANCE,TEST_BALANCE,SCENE_BALANCE} from './balance.js';
+import {CONFIG,ICE_BALANCE,LIGHTNING_BALANCE,AIR_BALANCE,EARTH_BALANCE,TEST_BALANCE,SCENE_BALANCE,PVP_BALANCE} from './balance.js';
 import {WANDS,scaledNormal,lightningPoint} from './wands.js';
 export {CONFIG} from './balance.js';
-export function createState(profile){return {
- time:0,nextId:100,scene:{id:'base',title:'Game',description:''},
- player:{id:1,x:600,y:450,angle:-Math.PI/2,name:profile.name,color:profile.color,wand:{id:2,type:'test'},mode:'Safe',charge:0},
- items:[],pedestals:[],portals:[],walls:[],activePedestal:null,nearPortal:null,
- projectiles:[],effects:[],targets:[],shots:0
-};}
-export function setMode(s,mode){if(!['Safe','Normal','Special'].includes(mode))return;s.player.mode=mode;s.player.charge=0;}
-export function dropWand(s){
- const p=s.player;if(!p.wand)return false;
+export {createRandom,nextRandom} from './rng.js';
+// The world state is plain JSON-serializable data. All rules are functions of (state, player id, input).
+const IDLE=Object.freeze({x:0,y:0,held:false});
+const SPAWN_SLOTS=[[0,0],[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
+export function createState(profile=null,options={}){
+ const seed=(options.seed??0)>>>0;
+ const s={
+  time:0,nextId:100,nextPlayerId:1,seed,rngState:seed,scene:{id:'base',title:'Game',description:''},spawn:{x:600,y:450},
+  players:[],items:[],pedestals:[],portals:[],walls:[],
+  projectiles:[],effects:[],targets:[],shots:0
+ };
+ if(profile)addPlayer(s,profile);
+ return s;
+}
+export const getPlayer=(s,id)=>s.players.find(p=>p.id===id);
+export function addPlayer(s,profile){
+ const [dx,dy]=SPAWN_SLOTS[s.players.length%SPAWN_SLOTS.length],spacing=SCENE_BALANCE.spawnSpacing;
+ const p={
+  id:s.nextPlayerId++,x:s.spawn.x+dx*spacing,y:s.spawn.y+dy*spacing,angle:-Math.PI/2,name:profile.name,color:profile.color,
+  wand:{id:s.nextId++,type:'test'},mode:'Safe',charge:0,hits:0,damage:0,activePedestal:null,nearPortal:null
+ };
+ s.players.push(p);return p;
+}
+export function removePlayer(s,id){
+ const p=getPlayer(s,id);if(!p)return false;
+ // A leaving player's wand stays in the world so that it is not lost.
+ if(p.wand)s.items.push({...p.wand,x:p.x,y:p.y,availableAt:s.time});
+ s.players=s.players.filter(i=>i!==p);return true;
+}
+export function setMode(s,id,mode){const p=getPlayer(s,id);if(!p||!['Safe','Normal','Special'].includes(mode))return;p.mode=mode;p.charge=0;}
+export function cancelCharge(s,id){const p=getPlayer(s,id);if(p)p.charge=0;}
+export function dropWand(s,id){
+ const p=getPlayer(s,id);if(!p?.wand)return false;
  s.items.push({...p.wand,x:Math.max(CONFIG.playerRadius,Math.min(CONFIG.worldWidth-CONFIG.playerRadius,p.x+Math.cos(p.angle)*CONFIG.dropDistance)),y:Math.max(CONFIG.playerRadius,Math.min(CONFIG.worldHeight-CONFIG.playerRadius,p.y+Math.sin(p.angle)*CONFIG.dropDistance)),availableAt:s.time+CONFIG.pickupDelay});
  p.wand=null;p.charge=0;return true;
 }
+// Discrete player actions travel as commands next to the continuous input so none is lost between ticks.
+export function applyCommand(s,id,command){
+ if(command.type==='setMode')setMode(s,id,command.mode);
+ else if(command.type==='drop')dropWand(s,id);
+ else if(command.type==='release')release(s,id);
+ else if(command.type==='cancel')cancelCharge(s,id);
+}
+// Group travel: a portal is ready only when every player in the world stands in it.
+export function readyPortal(s){
+ if(!s.players.length)return null;
+ return s.portals.find(portal=>portal.available&&s.players.every(p=>p.nearPortal===portal.id))??null;
+}
 function effect(s,details,duration){s.effects.push({...details,life:duration,duration});}
-function damage(target,amount){target.hits++;target.damage+=amount;}
-function areaDamage(s,x,y,radius,amount){
- // Self-damage and friendly fire are unresolved; this lobby affects dummies only.
- for(const target of s.targets)if(Math.hypot(target.x-x,target.y-y)<=radius+CONFIG.targetRadius)damage(target,amount);
+const isPlayer=(s,actor)=>s.players.includes(actor);
+const radiusOf=(s,actor)=>isPlayer(s,actor)?CONFIG.playerRadius:CONFIG.targetRadius;
+const hitKey=(s,actor)=>`${isPlayer(s,actor)?'p':'t'}${actor.id}`;
+// Everything an attack of this owner can affect: dummies and other players, never the attacker.
+function victims(s,ownerId){return [...s.targets,...s.players.filter(p=>p.id!==ownerId)];}
+function damage(s,victim,amount){victim.hits++;victim.damage+=isPlayer(s,victim)?amount*PVP_BALANCE.friendlyFireMultiplier:amount;}
+function areaDamage(s,owner,x,y,radius,amount){
+ for(const target of victims(s,owner.id))if(Math.hypot(target.x-x,target.y-y)<=radius+radiusOf(s,target))damage(s,target,amount);
 }
-function pushTarget(s,target,x,y,distance){
+function pushTarget(s,target,x,y,distance,fallbackAngle){
  let dx=target.x-x,dy=target.y-y;let length=Math.hypot(dx,dy);
- if(length<.001){dx=Math.cos(s.player.angle);dy=Math.sin(s.player.angle);length=1;}
- moveActor(s,target,dx/length*distance,dy/length*distance,CONFIG.targetRadius);
+ if(length<.001){dx=Math.cos(fallbackAngle);dy=Math.sin(fallbackAngle);length=1;}
+ moveActor(s,target,dx/length*distance,dy/length*distance,radiusOf(s,target));
 }
-function areaPush(s,x,y,radius,distance){for(const target of s.targets)if(Math.hypot(target.x-x,target.y-y)<=radius+CONFIG.targetRadius)pushTarget(s,target,x,y,distance);}
-function createEarthWall(s){
- const p=s.player,b=EARTH_BALANCE,horizontal=Math.abs(Math.cos(p.angle))<Math.abs(Math.sin(p.angle));
+function areaPush(s,owner,x,y,radius,distance){for(const target of victims(s,owner.id))if(Math.hypot(target.x-x,target.y-y)<=radius+radiusOf(s,target))pushTarget(s,target,x,y,distance,owner.angle);}
+function createEarthWall(s,p){
+ const b=EARTH_BALANCE,horizontal=Math.abs(Math.cos(p.angle))<Math.abs(Math.sin(p.angle));
  const width=horizontal?b.wallLength:b.wallThickness,height=horizontal?b.wallThickness:b.wallLength;
  const x=Math.max(0,Math.min(CONFIG.worldWidth-width,p.x+Math.cos(p.angle)*b.wallDistance-width/2));
  const y=Math.max(0,Math.min(CONFIG.worldHeight-height,p.y+Math.sin(p.angle)*b.wallDistance-height/2));
  // Do not create solid geometry overlapping an actor or an existing wall.
- if([p,...s.targets].some(a=>a.x+CONFIG.playerRadius>x&&a.x-CONFIG.playerRadius<x+width&&a.y+CONFIG.playerRadius>y&&a.y-CONFIG.playerRadius<y+height))return false;
+ if([...s.players,...s.targets].some(a=>a.x+CONFIG.playerRadius>x&&a.x-CONFIG.playerRadius<x+width&&a.y+CONFIG.playerRadius>y&&a.y-CONFIG.playerRadius<y+height))return false;
  if(s.walls.some(w=>x<w.x+w.width&&x+width>w.x&&y<w.y+w.height&&y+height>w.y))return false;
  s.walls.push({id:s.nextId++,x,y,width,height,expiresAt:s.time+b.wallDuration,owner:p.id});return true;
 }
-function projectile(s,details){
- const p=s.player,angle=details.angle??p.angle,radius=details.kind==='coldWave'?details.depth:details.radius;
+function projectile(s,p,details){
+ const angle=details.angle??p.angle,radius=details.kind==='coldWave'?details.depth:details.radius;
  const dx=Math.cos(angle)*CONFIG.projectileOffset,dy=Math.sin(angle)*CONFIG.projectileOffset;
  const hit=wallTrace(s,p.x,p.y,dx,dy,radius),offset=hit?Math.max(0,hit.t-1e-5):1;
  const x=Math.max(radius,Math.min(CONFIG.worldWidth-radius,p.x+dx*offset));
  const y=Math.max(radius,Math.min(CONFIG.worldHeight-radius,p.y+dy*offset));
  s.projectiles.push({id:s.nextId++,owner:p.id,x,y,angle,distance:0,power:p.charge,...details});
 }
-export function release(s){
- const p=s.player;
+export function release(s,id){
+ const p=getPlayer(s,id);if(!p)return;
  if(!p.wand||p.mode==='Safe'||p.charge<=0){p.charge=0;return;}
  const type=p.wand.type;
  if(p.mode==='Normal'){
-  if(type==='fire')projectile(s,{kind:'fire',speed:CONFIG.projectileSpeed,radius:CONFIG.projectileRadius+CONFIG.chargedRadiusBonus*p.charge,range:scaledNormal(CONFIG.projectileRange,CONFIG.minRangeFactor,p.charge),damage:scaledNormal(CONFIG.normalDamage,CONFIG.minDamageFactor,p.charge)});
+  if(type==='fire')projectile(s,p,{kind:'fire',speed:CONFIG.projectileSpeed,radius:CONFIG.projectileRadius+CONFIG.chargedRadiusBonus*p.charge,range:scaledNormal(CONFIG.projectileRange,CONFIG.minRangeFactor,p.charge),damage:scaledNormal(CONFIG.normalDamage,CONFIG.minDamageFactor,p.charge)});
   else if(type==='ice'){
    const b=ICE_BALANCE;
-   for(let i=0;i<b.pellets;i++)projectile(s,{kind:'icicle',angle:p.angle+b.spread*(i/(b.pellets-1)-.5),speed:b.projectileSpeed,radius:b.pelletRadius+b.chargedRadiusBonus*p.charge,range:scaledNormal(b.projectileRange,CONFIG.minRangeFactor,p.charge),damage:scaledNormal(b.pelletDamage,CONFIG.minDamageFactor,p.charge)});
+   for(let i=0;i<b.pellets;i++)projectile(s,p,{kind:'icicle',angle:p.angle+b.spread*(i/(b.pellets-1)-.5),speed:b.projectileSpeed,radius:b.pelletRadius+b.chargedRadiusBonus*p.charge,range:scaledNormal(b.projectileRange,CONFIG.minRangeFactor,p.charge),damage:scaledNormal(b.pelletDamage,CONFIG.minDamageFactor,p.charge)});
   }else if(type==='air'){
-   const b=AIR_BALANCE;projectile(s,{kind:'whirlwind',speed:b.projectileSpeed,radius:b.projectileRadius+b.chargedRadiusBonus*p.charge,range:scaledNormal(b.projectileRange,CONFIG.minRangeFactor,p.charge),damage:scaledNormal(b.normalDamage,CONFIG.minDamageFactor,p.charge),push:b.normalPush*p.charge});
+   const b=AIR_BALANCE;projectile(s,p,{kind:'whirlwind',speed:b.projectileSpeed,radius:b.projectileRadius+b.chargedRadiusBonus*p.charge,range:scaledNormal(b.projectileRange,CONFIG.minRangeFactor,p.charge),damage:scaledNormal(b.normalDamage,CONFIG.minDamageFactor,p.charge),push:b.normalPush*p.charge});
   }else if(type==='earth'){
-   const b=EARTH_BALANCE;projectile(s,{kind:'boulder',speed:b.projectileSpeed,radius:b.projectileRadius+b.chargedRadiusBonus*p.charge,range:scaledNormal(b.projectileRange,CONFIG.minRangeFactor,p.charge),damage:scaledNormal(b.normalDamage,CONFIG.minDamageFactor,p.charge),ricochets:0,hitIds:[]});
+   const b=EARTH_BALANCE;projectile(s,p,{kind:'boulder',speed:b.projectileSpeed,radius:b.projectileRadius+b.chargedRadiusBonus*p.charge,range:scaledNormal(b.projectileRange,CONFIG.minRangeFactor,p.charge),damage:scaledNormal(b.normalDamage,CONFIG.minDamageFactor,p.charge),ricochets:0,hitIds:[]});
   }else if(type==='test'){
-   const b=TEST_BALANCE;projectile(s,{kind:'spark',speed:b.projectileSpeed,radius:b.projectileRadius+b.chargedRadiusBonus*p.charge,range:scaledNormal(b.projectileRange,CONFIG.minRangeFactor,p.charge),damage:0,push:b.normalPush*p.charge});
+   const b=TEST_BALANCE;projectile(s,p,{kind:'spark',speed:b.projectileSpeed,radius:b.projectileRadius+b.chargedRadiusBonus*p.charge,range:scaledNormal(b.projectileRange,CONFIG.minRangeFactor,p.charge),damage:0,push:b.normalPush*p.charge});
   }else if(type==='lightning'){
    const b=LIGHTNING_BALANCE,range=scaledNormal(b.lineRange,CONFIG.minRangeFactor,p.charge);
    const wall=wallTrace(s,p.x,p.y,Math.cos(p.angle)*range,Math.sin(p.angle)*range,0);
    const visibleRange=range*(wall?.t??1);const x2=p.x+Math.cos(p.angle)*visibleRange,y2=p.y+Math.sin(p.angle)*visibleRange;
-   for(const target of s.targets)if(segmentDistance(target.x,target.y,p.x,p.y,x2,y2)<=CONFIG.targetRadius+b.lineRadius*p.charge)damage(target,scaledNormal(b.lineDamage,CONFIG.minDamageFactor,p.charge));
+   for(const target of victims(s,p.id))if(segmentDistance(target.x,target.y,p.x,p.y,x2,y2)<=radiusOf(s,target)+b.lineRadius*p.charge)damage(s,target,scaledNormal(b.lineDamage,CONFIG.minDamageFactor,p.charge));
    effect(s,{kind:'lightningLine',x:p.x,y:p.y,x2,y2},b.lineDuration);
   }
  }else if(type==='lightning'){
   // A sky strike targets the reached point directly; it performs no wall trace.
   const point=lightningPoint(p),b=LIGHTNING_BALANCE;
-  areaDamage(s,point.x,point.y,b.strikeRadius,b.strikeDamage);
+  areaDamage(s,p,point.x,point.y,b.strikeRadius,b.strikeDamage);
   effect(s,{kind:'skyStrike',owner:p.id,...point,radius:b.strikeRadius},b.strikeDuration);
  }else if(p.charge>=1){
   if(type==='fire'){
-   areaDamage(s,p.x,p.y,CONFIG.specialRadius,CONFIG.specialDamage);
+   areaDamage(s,p,p.x,p.y,CONFIG.specialRadius,CONFIG.specialDamage);
    effect(s,{kind:'fireWave',owner:p.id,x:p.x,y:p.y,radius:CONFIG.specialRadius},CONFIG.specialDuration);
   }else if(type==='air'){
-   const b=AIR_BALANCE;areaPush(s,p.x,p.y,b.specialRadius,b.specialPush);effect(s,{kind:'airSphere',x:p.x,y:p.y,radius:b.specialRadius},b.specialDuration);
+   const b=AIR_BALANCE;areaPush(s,p,p.x,p.y,b.specialRadius,b.specialPush);effect(s,{kind:'airSphere',x:p.x,y:p.y,radius:b.specialRadius},b.specialDuration);
   }else if(type==='earth'){
-   if(!createEarthWall(s)){p.charge=0;return;}
+   if(!createEarthWall(s,p)){p.charge=0;return;}
   }else if(type==='test'){
    const b=TEST_BALANCE;effect(s,{kind:'testSphere',x:p.x,y:p.y,radius:b.specialRadius},b.specialDuration);
   }else if(type==='ice'){
-   const b=ICE_BALANCE;projectile(s,{kind:'coldWave',speed:b.waveSpeed,range:b.waveRange,radius:b.waveRadius,depth:b.waveDepth,damage:b.waveDamage,hitIds:[]});
+   const b=ICE_BALANCE;projectile(s,p,{kind:'coldWave',speed:b.waveSpeed,range:b.waveRange,radius:b.waveRadius,depth:b.waveDepth,damage:b.waveDamage,hitIds:[]});
   }
  }else{p.charge=0;return;}
  s.shots++;p.charge=0;
 }
 function segmentDistance(x,y,ax,ay,bx,by){const dx=bx-ax,dy=by-ay;const t=Math.max(0,Math.min(1,((x-ax)*dx+(y-ay)*dy)/(dx*dx+dy*dy||1)));return Math.hypot(x-ax-t*dx,y-ay-t*dy);}
-export function step(s,input,dt){
- s.time+=dt;s.walls=s.walls.filter(w=>w.permanent||w.expiresAt>s.time);const p=s.player;let {x,y}=input;const length=Math.hypot(x,y);
+// inputs maps a player id to {x,y,held,commands}; a missing entry means an idle player.
+export function step(s,inputs,dt){
+ s.time+=dt;s.walls=s.walls.filter(w=>w.permanent||w.expiresAt>s.time);
+ for(const p of s.players)stepPlayer(s,p,inputs[p.id]??IDLE,dt);
+ s.projectiles=s.projectiles.filter(b=>advanceProjectile(s,b,dt));
+ s.effects=s.effects.filter(e=>(e.life-=dt)>0);
+}
+function stepPlayer(s,p,input,dt){
+ for(const command of input.commands??[])applyCommand(s,p.id,command);
+ let {x=0,y=0}=input;const length=Math.hypot(x,y);
  if(length>1){x/=length;y/=length;}
  if(length>CONFIG.inputDeadzone){
   p.angle=Math.atan2(y,x);
@@ -99,13 +147,12 @@ export function step(s,input,dt){
   p.charge=Math.min(1,p.charge+dt/(p.mode==='Special'?b.specialChargeTime:b.chargeTime));
  }
  const pedestal=s.pedestals.find(i=>Math.hypot(i.x-p.x,i.y-p.y)<=SCENE_BALANCE.pedestalRadius);
- if(pedestal&&s.activePedestal!==pedestal.id){p.wand={id:s.nextId++,type:pedestal.type};p.charge=0;}
- s.activePedestal=pedestal?.id??null;
- const portal=s.portals.find(i=>Math.hypot(i.x-p.x,i.y-p.y)<=SCENE_BALANCE.portalRadius);s.nearPortal=portal?.id??null;
+ if(pedestal&&p.activePedestal!==pedestal.id){p.wand={id:s.nextId++,type:pedestal.type};p.charge=0;}
+ p.activePedestal=pedestal?.id??null;
+ const portal=s.portals.find(i=>Math.hypot(i.x-p.x,i.y-p.y)<=SCENE_BALANCE.portalRadius);p.nearPortal=portal?.id??null;
+ // Items are removed on pickup, so with several nearby players the first one in order takes it.
  const item=s.items.find(i=>s.time>=i.availableAt&&Math.hypot(i.x-p.x,i.y-p.y)<=CONFIG.pickupRadius);
  if(!p.wand&&item){p.wand={id:item.id,type:item.type};s.items=s.items.filter(i=>i!==item);}
- s.projectiles=s.projectiles.filter(b=>advanceProjectile(s,b,dt));
- s.effects=s.effects.filter(e=>(e.life-=dt)>0);
 }
 
 // Slab intersection against expanded rectangles provides swept wall collision.
@@ -148,18 +195,19 @@ function advanceProjectile(s,b,dt){
   let hit=wallTrace(s,ax,ay,dx,dy,b.kind==='coldWave'?b.depth:b.radius);
   const edge=boundaryTrace(ax,ay,dx,dy,b.radius);if(edge&&(!hit||edge.t<hit.t))hit=edge;
   const travel=remaining*(hit?.t??1);b.x+=Math.cos(b.angle)*travel;b.y+=Math.sin(b.angle)*travel;b.distance+=travel;
-  const targets=s.targets.filter(t=>{
-   if(b.kind!=='coldWave')return segmentDistance(t.x,t.y,ax,ay,b.x,b.y)<=CONFIG.targetRadius+b.radius;
+  const targets=victims(s,b.owner).filter(t=>{
+   const reach=radiusOf(s,t);
+   if(b.kind!=='coldWave')return segmentDistance(t.x,t.y,ax,ay,b.x,b.y)<=reach+b.radius;
    const tx=t.x-ax,ty=t.y-ay,forward=tx*Math.cos(b.angle)+ty*Math.sin(b.angle),side=-tx*Math.sin(b.angle)+ty*Math.cos(b.angle);
-   return forward>=-b.depth-CONFIG.targetRadius&&forward<=travel+b.depth+CONFIG.targetRadius&&Math.abs(side)<=b.radius+CONFIG.targetRadius;
+   return forward>=-b.depth-reach&&forward<=travel+b.depth+reach&&Math.abs(side)<=b.radius+reach;
   });
   if(b.kind==='coldWave'||b.kind==='boulder'){
-   for(const target of targets)if(!b.hitIds.includes(target.id)){damage(target,b.damage);b.hitIds.push(target.id);}
+   for(const target of targets)if(!b.hitIds.includes(hitKey(s,target))){damage(s,target,b.damage);b.hitIds.push(hitKey(s,target));}
   }else if(targets.length){
-   const target=targets[0];damage(target,b.damage);
+   const target=targets[0];damage(s,target,b.damage);
    if(b.kind==='whirlwind'){
-    const center={x:target.x,y:target.y};for(const t of s.targets)if(Math.hypot(t.x-center.x,t.y-center.y)<=b.radius+CONFIG.targetRadius)pushTarget(s,t,ax,ay,b.push);
-   }else if(b.push)pushTarget(s,target,ax,ay,b.push);
+    const center={x:target.x,y:target.y};for(const t of victims(s,b.owner))if(Math.hypot(t.x-center.x,t.y-center.y)<=b.radius+radiusOf(s,t))pushTarget(s,t,ax,ay,b.push,b.angle);
+   }else if(b.push)pushTarget(s,target,ax,ay,b.push,b.angle);
    effect(s,{kind:b.kind==='icicle'?'iceImpact':b.kind==='spark'?'sparkImpact':b.kind==='whirlwind'?'airImpact':'impact',x:b.x,y:b.y,radius:(CONFIG.impactRadius+CONFIG.chargedImpactBonus)*b.power},CONFIG.impactDuration);return false;
   }
   if(hit){

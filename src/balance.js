@@ -34,4 +34,6 @@ export const TEST_BALANCE = Object.freeze({
  chargeTime:1,specialChargeTime:2,projectileSpeed:330,projectileRange:350,
  projectileRadius:2,chargedRadiusBonus:5,normalPush:24,specialRadius:150,specialDuration:.6
 });
-export const SCENE_BALANCE = Object.freeze({pedestalRadius:38,portalRadius:50});
+export const SCENE_BALANCE = Object.freeze({pedestalRadius:38,portalRadius:50,spawnSpacing:70});
+// Friendly fire deals half damage; self-damage stays undefined, so attackers never hit themselves.
+export const PVP_BALANCE = Object.freeze({friendlyFireMultiplier:.5});

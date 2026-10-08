@@ -1,7 +1,7 @@
 import {createState} from '../simulation.js';
 import {WANDS} from '../wands.js';
-export function createScene(profile){
- const s=createState(profile);
+export function createScene(profile=null,options={}){
+ const s=createState(profile,options);
  s.scene={id:'debug',title:'Wand playground',description:'Walk up to a pedestal to swap your wand.'};
  const positions=[[420,500],[540,500],[660,500],[780,500],[540,620],[660,620]];
  s.pedestals=Object.keys(WANDS).map((type,index)=>({id:20+index,type,x:positions[index][0],y:positions[index][1]}));

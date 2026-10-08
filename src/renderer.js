@@ -1,5 +1,6 @@
 import {CONFIG} from './balance.js';
 import {WANDS,lightningPoint} from './wands.js';
+import {getPlayer} from './simulation.js';
 // All artwork stays separate from simulation and can be replaced later.
 function circle(ctx,x,y,radius){ctx.beginPath();ctx.arc(x,y,radius,0,Math.PI*2);}
 function wand(ctx,x,y,angle,type='fire'){
@@ -48,9 +49,9 @@ function renderEffect(ctx,e){
  }
  ctx.restore();
 }
-export function render(ctx,s,width,height){
+export function render(ctx,s,width,height,localId){
  const scale=height/CONFIG.worldHeight*CONFIG.cameraZoom,visibleWidth=width/scale,visibleHeight=height/scale;
- const cameraX=visibleWidth>=CONFIG.worldWidth?(CONFIG.worldWidth-visibleWidth)/2:Math.max(0,Math.min(CONFIG.worldWidth-visibleWidth,s.player.x-visibleWidth/2));
+ const cameraX=visibleWidth>=CONFIG.worldWidth?(CONFIG.worldWidth-visibleWidth)/2:Math.max(0,Math.min(CONFIG.worldWidth-visibleWidth,getPlayer(s,localId).x-visibleWidth/2));
  const cameraY=(CONFIG.worldHeight-visibleHeight)/2;
  ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#161e27';ctx.fillRect(0,0,width,height);
  ctx.setTransform(scale,0,0,scale,-cameraX*scale,-cameraY*scale);ctx.fillStyle='#202a32';ctx.fillRect(0,0,CONFIG.worldWidth,CONFIG.worldHeight);
@@ -67,12 +68,14 @@ export function render(ctx,s,width,height){
  for(const portal of s.portals){ctx.strokeStyle='#a592ef';ctx.lineWidth=5;circle(ctx,portal.x,portal.y,35);ctx.stroke();ctx.fillStyle='#c4b7ff';ctx.fillText(portal.label,portal.x,portal.y+56);ctx.fillText('Not available yet',portal.x,portal.y+73);}
  for(const pedestal of s.pedestals){ctx.fillStyle='#44505f';ctx.fillRect(pedestal.x-26,pedestal.y-24,52,48);ctx.strokeStyle=WANDS[pedestal.type].color;ctx.lineWidth=3;ctx.strokeRect(pedestal.x-26,pedestal.y-24,52,48);wand(ctx,pedestal.x,pedestal.y,-.5,pedestal.type);ctx.fillStyle=WANDS[pedestal.type].color;ctx.fillText(WANDS[pedestal.type].name,pedestal.x,pedestal.y+43);}
  for(const i of s.items){ctx.strokeStyle=WANDS[i.type].color;ctx.lineWidth=2;circle(ctx,i.x,i.y,26);ctx.stroke();wand(ctx,i.x,i.y,-.5,i.type);ctx.fillStyle=WANDS[i.type].color;ctx.fillText(WANDS[i.type].name,i.x,i.y+43);}
- const p=s.player;drawCharacter(ctx,p);ctx.fillStyle='#fff';ctx.fillText(p.name,p.x,p.y+40);
- if(p.charge){
-  ctx.strokeStyle=WANDS[p.wand.type].color;ctx.lineWidth=4;ctx.beginPath();ctx.arc(p.x,p.y,27,-Math.PI/2,-Math.PI/2+Math.PI*2*p.charge);ctx.stroke();
-  if(p.wand.type==='lightning'&&p.mode==='Special'){
-   const point=lightningPoint(p);ctx.setLineDash([6,8]);ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(point.x,point.y);ctx.stroke();ctx.setLineDash([]);
-   circle(ctx,point.x,point.y,20);ctx.stroke();ctx.beginPath();ctx.moveTo(point.x-28,point.y);ctx.lineTo(point.x+28,point.y);ctx.moveTo(point.x,point.y-28);ctx.lineTo(point.x,point.y+28);ctx.stroke();
+ for(const p of s.players){
+  drawCharacter(ctx,p);ctx.fillStyle='#fff';ctx.fillText(p.name,p.x,p.y+40);
+  if(p.charge){
+   ctx.strokeStyle=WANDS[p.wand.type].color;ctx.lineWidth=4;ctx.beginPath();ctx.arc(p.x,p.y,27,-Math.PI/2,-Math.PI/2+Math.PI*2*p.charge);ctx.stroke();
+   if(p.wand.type==='lightning'&&p.mode==='Special'){
+    const point=lightningPoint(p);ctx.setLineDash([6,8]);ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(point.x,point.y);ctx.stroke();ctx.setLineDash([]);
+    circle(ctx,point.x,point.y,20);ctx.stroke();ctx.beginPath();ctx.moveTo(point.x-28,point.y);ctx.lineTo(point.x+28,point.y);ctx.moveTo(point.x,point.y-28);ctx.lineTo(point.x,point.y+28);ctx.stroke();
+   }
   }
  }
  for(const b of s.projectiles)renderProjectile(ctx,b);for(const e of s.effects)renderEffect(ctx,e);

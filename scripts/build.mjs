@@ -11,7 +11,7 @@ export async function build(variant){
  const staging=await mkdtemp(path.join(dist,`.${variant}-`));
  try{
   await mkdir(path.join(staging,'src/scenes'),{recursive:true});
-  for(const file of ['index.html','style.css','src/main.js','src/simulation.js','src/balance.js','src/wands.js','src/renderer.js'])await copyFile(path.join(root,file),path.join(staging,file));
+  for(const file of ['index.html','style.css','src/main.js','src/simulation.js','src/balance.js','src/rng.js','src/wands.js','src/renderer.js'])await copyFile(path.join(root,file),path.join(staging,file));
   const scene=variant==='debug'?'debug':'lobby';
   await copyFile(path.join(root,`src/scenes/${scene}.js`),path.join(staging,`src/scenes/${scene}.js`));
   await writeFile(path.join(staging,'src/scene.js'),`export {createScene} from './scenes/${scene}.js';\n`);
