@@ -20,8 +20,8 @@ test('debug scene has every wand on permanent pedestals, no loose starting items
 });
 test('game lobby has a harmless starter and portals without playground entities',()=>{
  const s=lobbyScene(profile);assert.equal(s.players[0].wand.type,'test');assert.equal(s.scene.id,'lobby');
- assert.equal(s.pedestals.length,0);assert.equal(s.targets.length,0);assert.equal(s.items.length,0);assert.ok(s.portals.length>0);
- assert.ok(s.portals.every(p=>!p.available));s.players[0].x=s.portals[0].x;s.players[0].y=s.portals[0].y;
+ assert.equal(s.pedestals.length,0);assert.equal(s.targets.length,0);assert.equal(s.items.length,0);assert.equal(s.portals.length,3);
+ assert.ok(s.portals.every(p=>p.available));s.players[0].x=s.portals[0].x;s.players[0].y=s.portals[0].y;
  step(s,{1:{x:0,y:0}},.01);assert.equal(s.players[0].nearPortal,s.portals[0].id);
 });
 test('Test Wand has zero damage in both modes, with small Normal push only',()=>{

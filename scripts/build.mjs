@@ -3,7 +3,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 export async function build(variant){
- if(!['debug','game'].includes(variant))throw new Error('Build variant must be debug or game.');
+ if(!['debug','game','generation'].includes(variant))throw new Error('Build variant must be debug, game or generation.');
  const dist=path.join(root,'dist'),output=path.join(dist,variant);await mkdir(dist,{recursive:true});
  try{await access(output);await access(path.join(output,'.kadkaton-build'));}catch(error){
   try{await access(output);throw new Error(`Refusing to replace unmanaged build directory: ${output}`);}catch(missing){if(missing.code!=='ENOENT')throw missing;}
@@ -11,8 +11,8 @@ export async function build(variant){
  const staging=await mkdtemp(path.join(dist,`.${variant}-`));
  try{
   await mkdir(path.join(staging,'src/scenes'),{recursive:true});
-  for(const file of ['index.html','style.css','src/main.js','src/simulation.js','src/balance.js','src/rng.js','src/wands.js','src/renderer.js'])await copyFile(path.join(root,file),path.join(staging,file));
-  const scene=variant==='debug'?'debug':'lobby';
+  for(const file of ['index.html','style.css','src/main.js','src/simulation.js','src/balance.js','src/rng.js','src/wands.js','src/renderer.js','src/generator.js','src/locations.js','src/scenes/lobby.js'])await copyFile(path.join(root,file),path.join(staging,file));
+  const scene=variant==='debug'?'debug':variant==='generation'?'generation':'lobby';
   await copyFile(path.join(root,`src/scenes/${scene}.js`),path.join(staging,`src/scenes/${scene}.js`));
   await writeFile(path.join(staging,'src/scene.js'),`export {createScene} from './scenes/${scene}.js';\n`);
   await writeFile(path.join(staging,'.kadkaton-build'),variant+'\n');
@@ -23,5 +23,5 @@ export async function build(variant){
  return output;
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
- const variant=process.argv[2]||'all';for(const target of variant==='all'?['debug','game']:[variant])console.log(`Built ${target}: ${await build(target)}`);
+ const variant=process.argv[2]||'all';for(const target of variant==='all'?['debug','game','generation']:[variant])console.log(`Built ${target}: ${await build(target)}`);
 }

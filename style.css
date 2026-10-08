@@ -32,7 +32,7 @@ progress{display:block;width:100%;height:8px;accent-color:#ffad45}
 #joystick{position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:132px;height:132px;background:#9fb5cf20;border:2px solid #9fb5cf70;border-radius:50%;touch-action:none;pointer-events:auto;user-select:none}
 #stick{width:52px;height:52px;background:#a5b8d6b0;border:2px solid #d8e7ff;border-radius:50%;position:absolute;left:calc(50% - 26px);top:calc(50% - 26px);pointer-events:none}
 .inventory{position:absolute;right:0;bottom:0;display:flex;flex-direction:column;gap:8px;pointer-events:auto}
-#wand-slot,.empty-slot{display:flex;flex-direction:column;align-items:center;justify-content:center;width:68px;height:68px;text-align:center;background:#1c2638e8;border:1px solid #78889e;border-radius:8px;padding:4px}
+#wand-slot,#rune-slot{display:flex;flex-direction:column;align-items:center;justify-content:center;width:68px;height:68px;text-align:center;background:#1c2638e8;border:1px solid #78889e;border-radius:8px;padding:4px}
 .inventory svg{display:block;width:34px;height:34px}
 .inventory small{font-size:10px;line-height:14px}
 .empty-slot{opacity:.65}
@@ -42,4 +42,13 @@ progress{display:block;width:100%;height:8px;accent-color:#ffad45}
 .instructions summary{cursor:pointer;min-height:22px}
 #notice{position:absolute;left:10%;right:10%;top:36%;text-align:center;pointer-events:none;color:#ffe0a0;text-shadow:0 2px 4px #000;font-size:13px}
 @media(max-aspect-ratio:3/4){#game{width:100vw;height:100dvh}}
-@media(max-width:360px),(max-height:640px){#joystick{width:108px;height:108px}#mode-slider{width:80px}.mode-label{font-size:10px}#wand-slot,.empty-slot{width:60px;height:60px}.inventory{gap:6px}.hud strong{font-size:14px}.hud span{font-size:11px}.hud button{padding:8px}}
+@media(max-width:360px),(max-height:640px){#joystick{width:108px;height:108px}#mode-slider{width:80px}.mode-label{font-size:10px}#wand-slot,#rune-slot{width:60px;height:60px}.inventory{gap:6px}.hud strong{font-size:14px}.hud span{font-size:11px}.hud button{padding:8px}}
+
+#zoom-control{position:absolute;right:14px;top:34%;display:flex;flex-direction:column;align-items:center;background:#152030dd;padding:8px 4px;border-radius:8px;font-size:11px}
+#zoom{writing-mode:vertical-lr;direction:rtl;width:30px;height:140px;touch-action:none;accent-color:#ffc36b}
+#vitals{position:absolute;top:126px;left:12px;font-size:12px;background:#111923cf;padding:5px;border-radius:4px}
+#generation-tools{position:absolute;left:12px;right:12px;top:144px;display:flex;gap:6px;flex-wrap:wrap;background:#111923ee;padding:8px;border-radius:6px;font-size:11px}
+#generation-tools[hidden],#retry[hidden]{display:none}
+#generation-tools label{display:flex;flex-direction:column;gap:3px}#generation-tools input{width:105px}#generation-tools select{width:82px}#generation-tools button{padding:6px;font-size:12px}#map-stats{flex-basis:100%}
+#retry{position:absolute;top:48%;left:20%;right:20%}
+#game.viewer #mode-slider,#game.viewer .inventory,#game.viewer .spell-status,#game.viewer #vitals{display:none}

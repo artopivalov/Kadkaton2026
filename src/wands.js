@@ -9,4 +9,4 @@ export const WANDS = Object.freeze({
 });
 export function normalPower(charge){return Math.max(0,Math.min(1,charge))**CONFIG.normalChargeExponent;}
 export function scaledNormal(maximum,minimumFactor,charge){return maximum*(minimumFactor+(1-minimumFactor)*normalPower(charge));}
-export function lightningPoint(player){const b=LIGHTNING_BALANCE;const distance=b.strikeMinDistance+(b.strikeMaxDistance-b.strikeMinDistance)*player.charge;return {x:player.x+Math.cos(player.angle)*distance,y:player.y+Math.sin(player.angle)*distance};}
+export function lightningPoint(player){const b=LIGHTNING_BALANCE;const distance=b.strikeMinDistance+(b.strikeMaxDistance-b.strikeMinDistance)*player.charge;const adjusted=distance*(player.rune?.type==='range'?player.rune.factor:1);return {x:player.x+Math.cos(player.angle)*adjusted,y:player.y+Math.sin(player.angle)*adjusted};}

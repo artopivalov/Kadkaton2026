@@ -7,6 +7,7 @@
     "start": "python3 -m http.server 8000",
     "build": "node scripts/build.mjs",
     "build:debug": "node scripts/build.mjs debug",
+    "build:generation": "node scripts/build.mjs generation",
     "build:game": "node scripts/build.mjs game"
   }
 }
