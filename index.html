@@ -9,13 +9,26 @@
 <label for="name">Wizard name</label><input id="name" maxlength="24" placeholder="Wizard" autocomplete="nickname">
 <label for="color">Character color</label><input id="color" type="color" value="#79a9ff">
 <button type="submit">Play</button>
-<button type="button" aria-disabled="true">Host game</button>
-<button type="button" aria-disabled="true">Join game</button>
-</form><small>Hosting and joining are not available yet.</small>
+<button type="button" id="host-game">Host game</button>
+<button type="button" id="join-game">Join game</button>
+</form>
+<small id="menu-hint">Online play needs the matchmaking server: run "npm run server" and open the game from its address.</small>
+<p id="menu-message" role="alert"></p>
+<section id="net-panel" hidden aria-labelledby="net-title">
+<h2 id="net-title"></h2>
+<div id="net-host" hidden>
+<label for="room-name">Room name</label><input id="room-name" maxlength="24" placeholder="My game">
+<label for="room-max">Maximum players</label><select id="room-max"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select>
+<button type="button" id="room-create">Create room</button>
+</div>
+<div id="net-join" hidden><ul id="room-list" aria-live="polite"></ul><p id="room-empty"></p></div>
+<p id="net-status" role="alert"></p>
+<button type="button" id="net-back">Back</button>
+</section>
 </main>
 <section id="game" hidden aria-label="Lobby">
 <canvas id="canvas" aria-label="Lobby with a wizard, wands and training dummies"></canvas>
-<header class="hud"><div><strong id="player-name"></strong><span id="scene-title"></span></div><button id="exit">Menu</button></header>
+<header class="hud"><div><strong id="player-name"></strong><span id="scene-title"></span><span id="net-hud"></span></div><button id="exit">Menu</button></header>
 <div id="status-hud">
 <div id="vitals"></div><progress id="health-bar" max="100" value="100" aria-label="Health"></progress>
 <div class="spell-status"><p id="mode-help"></p><progress id="charge" max="1" value="0" aria-label="Spell charge"></progress></div>

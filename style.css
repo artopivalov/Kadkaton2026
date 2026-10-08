@@ -72,3 +72,19 @@ progress{display:block;width:100%;height:8px;accent-color:#ffad45}
 #status-hud #debug-tools{width:auto;align-self:flex-start;pointer-events:auto}
 
 #debug-tools{display:flex;flex-wrap:wrap;gap:5px;max-width:100%}#debug-tools label{display:flex;align-items:center;gap:4px}#debug-tools select{max-width:130px}#debug-tools button{padding:4px 6px;font-size:11px;min-height:30px}
+
+/* Warm neutral preview keeps every custom cloth color readable. */
+#character-preview{background:#e9ddbb;border:2px solid #496b4a}
+
+/* Online play: room panel and session status */
+.menu form[hidden]{display:none}
+#net-panel{display:grid;gap:10px;margin:12px 0 24px}#net-panel[hidden],#net-host[hidden],#net-join[hidden]{display:none}
+#net-host{display:grid;gap:10px}#net-panel h2{margin:0;font-size:20px}#net-panel label{color:#aebdd0}
+#net-panel select{font:inherit;padding:10px;border:1px solid #64748b;border-radius:8px;background:#202a39;color:#fff}
+#room-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+#room-list li{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#202a39;border:1px solid #64748b;border-radius:8px;padding:8px 10px}
+#room-list .meta{display:grid;min-width:0}#room-list .meta strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#room-list button{min-height:38px;padding:6px 14px}
+#net-status{min-height:1.4em;margin:0;color:#aebdd0}#net-status.error,#menu-message{color:#ff9b9b}
+#menu-message{margin:8px 0 0}#menu-message:empty{display:none}
+.hud #net-hud{color:#9ee6b4;max-width:200px}

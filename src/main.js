@@ -7,10 +7,14 @@ import {step,getPlayer,readyPortal} from './simulation.js';
 import {render,renderPreview} from './renderer.js';
 import {WANDS} from './wands.js';
 import {createScene} from './scene.js';
+import {createHost} from './net/host.js';
+import {createClient} from './net/client.js';
+import {connectServer} from './net/matchmaking.js';
+import {acceptPeer,connectToHost} from './net/rtc.js';
 const $=selector=>document.querySelector(selector);
 const menu=$('#menu'),game=$('#game'),canvas=$('#canvas'),ctx=canvas.getContext('2d'),joystick=$('#joystick'),stick=$('#stick');
 let view={zoom:CAMERA_BALANCE.default},targetZoom=CAMERA_BALANCE.default;
-let state=null,localId=null,pending=[],accumulator=0,activePointer=null,vector={x:0,y:0},keys=new Set(),lastTime=0,noticeUntil=0;
+let session=null,sceneKey='',state=null,localId=null,pending=[],accumulator=0,activePointer=null,vector={x:0,y:0},keys=new Set(),lastTime=0,noticeUntil=0;
 try{const profile=JSON.parse(localStorage.getItem('kadkaton.profile'));if(profile){$('#name').value=String(profile.name||'').slice(0,24);if(/^#[0-9a-f]{6}$/i.test(profile.color))$('#color').value=profile.color;}}catch{}
 function notice(message){$('#notice').textContent=message;noticeUntil=performance.now()+2300;}
 function clearInput(){activePointer=null;modePointer=null;vector={x:0,y:0};keys.clear();stick.style.transform='';joystick.hidden=true;pending.length=0;if(state)pending.push({type:'cancel'});}
@@ -50,8 +54,10 @@ modeSlider.addEventListener('keydown',event=>{
 const preview=$('#character-preview'),previewContext=preview.getContext('2d');
 function updatePreview(){renderPreview(previewContext,$('#color').value);}
 $('#color').addEventListener('input',updatePreview);$('#color').addEventListener('change',updatePreview);updatePreview();
-$('#start-form').addEventListener('submit',event=>{event.preventDefault();const profile={name:$('#name').value.trim()||'Wizard',color:$('#color').value};try{localStorage.setItem('kadkaton.profile',JSON.stringify(profile));}catch{}clearInput();state=createScene(profile);localId=state.players[0].id;syncScene();pending.length=0;accumulator=0;menu.hidden=true;game.hidden=false;updateUI();game.setAttribute('aria-label',state.scene.title);canvas.setAttribute('aria-label',state.scene.title);$('#scene-title').textContent=state.scene.title;notice(state.scene.description);});
-$('#exit').addEventListener('click',()=>{clearInput();state=null;localId=null;game.hidden=true;menu.hidden=false;$('#name').focus();});
+function readProfile(){const profile={name:$('#name').value.trim()||'Wizard',color:$('#color').value};try{localStorage.setItem('kadkaton.profile',JSON.stringify(profile));}catch{}return profile;}
+function showGame(){clearInput();pending.length=0;accumulator=0;menu.hidden=true;game.hidden=false;syncScene();sceneKey=state.scene.id+state.scene.title;updateUI();game.setAttribute('aria-label',state.scene.title);canvas.setAttribute('aria-label',state.scene.title);$('#scene-title').textContent=state.scene.title;notice(state.scene.description);}
+$('#start-form').addEventListener('submit',event=>{event.preventDefault();$('#menu-message').textContent='';state=createScene(readProfile());localId=state.players[0].id;showGame();});
+$('#exit').addEventListener('click',()=>leaveSession());
 $('#wand-slot').addEventListener('click',()=>{if(me()?.wand){pending.push({type:'drop'});notice('Wand dropped. Move close to pick it up.');}});
 $('#rune-slot').addEventListener('click',()=>{if(me()?.rune)pending.push({type:'dropRune'});});
 $('#zoom').addEventListener('input',()=>{targetZoom=Number($('#zoom').value);});
@@ -64,7 +70,7 @@ $('#rarity').innerHTML=RARITIES.map(r=>`<option>${r}</option>`).join('');
 $('#rarity').addEventListener('change',()=>pending.push({type:'setRarity',rarity:$('#rarity').value}));
 function syncScene(){$('#debug-tools').hidden=state.scene.id!=='debug';game.classList.toggle('viewer',Boolean(state.scene.viewer));$('#generation-tools').hidden=!state.scene.viewer;$('#scene-title').textContent=state.scene.title;game.setAttribute('aria-label',state.scene.title);canvas.setAttribute('aria-label',state.scene.title);if(state.scene.viewer){view.x=state.spawn.x;view.y=state.spawn.y;$('#map-stats').textContent=`${state.map.pois.length} POI · ${state.enemies.length} enemies · Seed ${state.seed}`;}else{delete view.x;delete view.y;}clearInput();}
 $('#regenerate').addEventListener('click',()=>{enterLocation(state,$('#location').value,Number($('#seed').value)>>>0,{viewer:true});syncScene();});
-$('#retry').addEventListener('click',()=>{if(state.scene.id==='debug'){const p=me();state=createScene({name:p.name,color:p.color});localId=state.players[0].id;syncScene();notice('Playground reset.');}else{configureLobby(state);syncScene();notice('Choose another adventure.');}});
+$('#retry').addEventListener('click',()=>{if(session?.role==='client'){session.client.requestLobby();notice('Asked the host to return to the lobby.');return;}if(state.scene.id==='debug'){const p=me();state=createScene({name:p.name,color:p.color});localId=state.players[0].id;syncScene();notice('Playground reset.');}else{configureLobby(state);session?.match?.setInGame(false);syncScene();notice('Choose another adventure.');}});
 function position(event){const x=event.clientX-gestureOrigin.x,y=event.clientY-gestureOrigin.y;const length=Math.hypot(x,y),radius=42;const ratio=length>radius?radius/length:1;vector={x:x*ratio/radius,y:y*ratio/radius};stick.style.transform=`translate(${vector.x*radius}px,${vector.y*radius}px)`;}
 let gestureOrigin={x:0,y:0};
 // Only the canvas starts a gesture; UI owns its own pointer events.
@@ -82,19 +88,110 @@ window.addEventListener('keyup',event=>{const k=event.key.toLowerCase();if(!move
 window.addEventListener('blur',clearInput);document.addEventListener('visibilitychange',()=>{if(document.hidden)clearInput();});
 // Local input becomes one input frame; discrete actions ride along as commands.
 function localInput(){return {...(activePointer!==null?vector:keyboardVector()),held:activePointer!==null||keys.size>0,commands:pending.splice(0)};}
+// ---- Online play -------------------------------------------------------------------------------
+const netPanel=$('#net-panel'),netStatus=$('#net-status'),startForm=$('#start-form');
+function setNetStatus(text,isError=true){netStatus.textContent=text;netStatus.className=isError?'error':'';}
+function openPanel(mode){
+ closeNetwork();$('#menu-message').textContent='';startForm.hidden=true;$('#menu-hint').hidden=true;netPanel.hidden=false;
+ $('#net-title').textContent=mode==='host'?'Host a game':'Join a game';$('#net-host').hidden=mode!=='host';$('#net-join').hidden=mode!=='join';setNetStatus('');
+}
+function closePanel(){closeNetwork();netPanel.hidden=true;startForm.hidden=false;$('#menu-hint').hidden=false;setNetStatus('');}
+let panelMatch=null;
+function closeNetwork(){panelMatch?.close();panelMatch=null;}
+async function connectOrExplain(){
+ setNetStatus('Connecting to the matchmaking server...',false);
+ try{const match=await connectServer();setNetStatus('',false);return match;}
+ catch(error){setNetStatus(`${error.message} Run "npm run server" and open the game from the address it shows.`);return null;}
+}
+function leaveSession(message=''){
+ const current=session;session=null;current?.client?.close();current?.host?.close();current?.match?.close();
+ clearInput();state=null;localId=null;sceneKey='';game.hidden=true;menu.hidden=false;
+ startForm.hidden=false;netPanel.hidden=true;$('#menu-hint').hidden=false;$('#net-hud').textContent='';$('#menu-message').textContent=message;
+ if(!message)$('#name').focus();
+}
+$('#host-game').addEventListener('click',()=>{openPanel('host');$('#room-name').value||($('#room-name').value=`${$('#name').value.trim()||'Wizard'}'s game`);});
+$('#join-game').addEventListener('click',async()=>{
+ openPanel('join');renderRooms([]);const match=await connectOrExplain();if(!match)return;
+ if(netPanel.hidden||$('#net-join').hidden){match.close();return;}
+ panelMatch=match;match.onRooms=renderRooms;match.onClose=()=>{if(panelMatch===match){panelMatch=null;renderRooms([]);setNetStatus('Lost connection to the matchmaking server.');}};match.subscribe();
+});
+$('#net-back').addEventListener('click',closePanel);
+function renderRooms(rooms){
+ const list=$('#room-list');list.replaceChildren();$('#room-empty').textContent=rooms.length?'':(panelMatch?'No open rooms yet. Ask a friend to host one.':'');
+ for(const room of rooms){
+  const item=document.createElement('li'),meta=document.createElement('div'),name=document.createElement('strong'),detail=document.createElement('small'),button=document.createElement('button');
+  meta.className='meta';name.textContent=room.name;detail.textContent=`${room.hostName} · ${room.players}/${room.max} players${room.inGame?' · in game':''}`;
+  button.type='button';button.textContent='Join';button.disabled=!room.joinable;button.title=room.joinable?'':room.inGame?'The game has already started':'Room is full';
+  button.addEventListener('click',()=>joinRoom(room));meta.append(name,detail);item.append(meta,button);list.append(item);
+ }
+}
+async function joinRoom(room){
+ const match=panelMatch;if(!match)return;const profile=readProfile();
+ for(const button of $('#room-list').querySelectorAll('button'))button.disabled=true;
+ setNetStatus(`Joining ${room.name}...`,false);
+ try{
+  const joined=await match.join(room.id,profile.name);match.unsubscribe();
+  setNetStatus('Connecting to the host...',false);
+  let link;try{link=await connectToHost(match,joined.hostId);}catch(error){match.leave();match.subscribe();throw error;}
+  panelMatch=null;match.onRooms=null;match.onClose=null;
+  const client=createClient(link,profile,{onNotice:notice,onClose:reason=>{if(session?.client===client)leaveSession(reason);}});
+  session={role:'client',match,client,waiting:true};setNetStatus('Connected. Waiting for the game...',false);
+  setTimeout(()=>{if(session?.client===client&&session.waiting)leaveSession('The host did not respond.');},8000);
+ }catch(error){setNetStatus(error.message);for(const button of $('#room-list').querySelectorAll('button'))button.disabled=false;}
+}
+$('#room-create').addEventListener('click',async()=>{
+ const match=await connectOrExplain();if(!match)return;
+ const profile=readProfile();const hosting=createScene(profile);
+ if(hosting.scene.viewer){setNetStatus('Online play is not available in this build.');match.close();return;}
+ let hosted;
+ try{hosted=await match.host({name:profile.name,roomName:$('#room-name').value.trim()||`${profile.name}'s game`,scene:hosting.scene.id,max:Number($('#room-max').value)});}
+ catch(error){setNetStatus(error.message);match.close();return;}
+ state=hosting;localId=state.players[0].id;
+ const host=createHost(state,{maxPlayers:hosted.max,onJoin:name=>notice(`${name} joined the game.`),onLeave:name=>notice(`${name} left the game.`),onRequest:kind=>{if(kind==='lobby'){configureLobby(state);match.setInGame(false);syncScene();notice('Back in the lobby.');}}});
+ match.onPeerJoined=async(id,name)=>{try{host.addPeer(id,await acceptPeer(match,id));}catch{notice(`${name} could not connect directly.`);}};
+ match.onPeerLeft=id=>host.removePeer(id);
+ match.onClose=()=>{if(session?.match===match)notice('Lost the matchmaking server: nobody new can join.');};
+ session={role:'host',match,host,max:hosted.max};closePanel();showGame();notice(`Room "${$('#room-name').value.trim()||profile.name}" is open. Waiting for players.`);
+});
+// Local input becomes one input frame; discrete actions ride along as commands.
+function advance(now,dt){
+ if(session?.role==='client'){
+  const rs=session.client.update(now,localInput);
+  if(rs){state=rs;localId=session.client.localId;if(session.waiting){session.waiting=false;showGame();}}
+  return;
+ }
+ accumulator+=dt;
+ while(accumulator>=TICK){
+  const input=localInput();
+  if(state.scene.viewer){view.x+=input.x*CAMERA_BALANCE.flightSpeed*TICK;view.y+=input.y*CAMERA_BALANCE.flightSpeed*TICK;}
+  else{
+   step(state,{[localId]:input,...session?.host?.collectInputs()},TICK);session?.host?.afterTick();
+   const portal=readyPortal(state);
+   if(portal){if(portal.location==='lobby')configureLobby(state);else enterLocation(state,portal.location);session?.match?.setInGame(state.scene.id!=='lobby');syncScene();notice(state.scene.description);}
+  }
+  accumulator-=TICK;
+ }
+}
 function frame(now){
  const dt=Math.min((now-lastTime)/1000||0,.1);lastTime=now;
- if(state&&!document.hidden){
-  const before=me().wand,previousPortal=me().nearPortal;
-  accumulator+=dt;
-  while(accumulator>=TICK){const input=localInput();if(state.scene.viewer){view.x+=input.x*CAMERA_BALANCE.flightSpeed*TICK;view.y+=input.y*CAMERA_BALANCE.flightSpeed*TICK;}else{step(state,{[localId]:input},TICK);const portal=readyPortal(state);if(portal){if(portal.location==='lobby')configureLobby(state);else enterLocation(state,portal.location);syncScene();notice(state.scene.description);}}accumulator-=TICK;}
-  view.zoom+=(targetZoom-view.zoom)*(1-Math.exp(-CAMERA_BALANCE.smoothing*dt));
-  const player=me();
-  if(player.wand&&before?.id!==player.wand.id)notice(`${WANDS[player.wand.type].name} equipped`);
-  if(player.nearPortal&&player.nearPortal!==previousPortal)notice('All players must enter the same portal.');
-  const r=canvas.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2);const width=Math.round(r.width*dpr),height=Math.round(r.height*dpr);
-  if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}
-  render(ctx,state,width,height,localId,view);updateUI();if(now>noticeUntil)$('#notice').textContent='';
+ if(session?.role==='client'||(state&&!document.hidden)){
+  const before=state&&me()?.wand,previousPortal=state&&me()?.nearPortal;
+  advance(now,dt);
+  if(state&&!(session?.waiting)){
+   view.zoom+=(targetZoom-view.zoom)*(1-Math.exp(-CAMERA_BALANCE.smoothing*dt));
+   const player=me();
+   if(player){
+    if(player.wand&&before?.id!==player.wand.id)notice(`${WANDS[player.wand.type].name} equipped`);
+    if(player.nearPortal&&player.nearPortal!==previousPortal)notice('All players must enter the same portal.');
+   }
+   if(session?.role==='client'&&sceneKey!==state.scene.id+state.scene.title){sceneKey=state.scene.id+state.scene.title;syncScene();notice(state.scene.description);}
+   const r=canvas.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2);const width=Math.round(r.width*dpr),height=Math.round(r.height*dpr);
+   if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}
+   render(ctx,state,width,height,localId,view);updateUI();
+   if(session&&state.scene.id==='debug')$('#retry').hidden=true;
+   $('#net-hud').textContent=session?.role==='host'?`Hosting · ${state.players.length}/${session.max} players`:session?.role==='client'?`Online · ${session.client.rtt===null?'...':Math.round(session.client.rtt)+' ms'}`:'';
+   if(now>noticeUntil)$('#notice').textContent='';
+  }
  }
  requestAnimationFrame(frame);
 }

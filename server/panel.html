@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kadkaton server</title>
+<style>
+:root{--bg:#10151c;--panel:#18202a;--line:#2a3644;--text:#e5ebf6;--muted:#8d9bb0;--accent:#79a9ff;--ok:#6fd49a;--bad:#ff7d7d;--warn:#f0c36a}
+@media (prefers-color-scheme:light){:root{--bg:#f2f5f9;--panel:#fff;--line:#d3dbe6;--text:#16202c;--muted:#5b6b80;--accent:#2d62c8;--ok:#1d8a52;--bad:#c53b3b;--warn:#9a6a00}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,sans-serif}
+main{max-width:860px;margin:0 auto;padding:20px 16px 40px;display:grid;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+h1{font-size:20px;margin:0;flex:1}
+.pill{padding:3px 12px;border-radius:99px;border:1px solid var(--line);font-size:13px;color:var(--muted)}
+.pill.on{color:var(--ok);border-color:var(--ok)}.pill.off{color:var(--bad);border-color:var(--bad)}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+button{font:inherit;padding:8px 18px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button:disabled{opacity:.45;cursor:default}
+button.small{padding:3px 10px;font-size:13px}
+label{display:flex;align-items:center;gap:8px;color:var(--muted)}
+.urls{display:grid;gap:6px;margin-top:12px}
+.url{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.url b{min-width:56px;color:var(--muted);font-weight:500}
+.url code{word-break:break-all}
+.stats{display:flex;gap:24px;flex-wrap:wrap}
+.stats div{display:grid}.stats span{color:var(--muted);font-size:13px}.stats strong{font-size:22px}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);font-size:14px}
+th{color:var(--muted);font-weight:500}
+td.empty{color:var(--muted);text-align:center;padding:16px}
+#log{height:220px;overflow:auto;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:12.5px/1.5 ui-monospace,Menlo,monospace}
+#log div{white-space:pre-wrap;word-break:break-word}
+.info{color:var(--text)}.debug{color:var(--muted)}.warn{color:var(--warn)}.error{color:var(--bad)}
+#banner{display:none;background:var(--bad);color:#fff;border-radius:8px;padding:10px 14px}
+small{color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+<div id="banner" role="alert">Connection to the launcher was lost. The server has stopped. Run <code>npm run server</code> again.</div>
+<header><h1>Kadkaton matchmaking server</h1><span id="status" class="pill off">Stopped</span></header>
+<section>
+<h2>Control</h2>
+<div class="row">
+<button id="start" class="primary" disabled>Start</button>
+<button id="stop" disabled>Stop</button>
+<label><input id="tunnel" type="checkbox" checked> Public tunnel (Cloudflare)</label>
+</div>
+<div class="urls" id="urls"></div>
+<p><small>Closing this tab stops the server. Players on other networks need the public link; the tunnel address changes every start.</small></p>
+</section>
+<section>
+<h2>Activity</h2>
+<div class="stats"><div><span>Connected players</span><strong id="clients">0</strong></div><div><span>Open rooms</span><strong id="roomCount">0</strong></div><div><span>Uptime</span><strong id="uptime">-</strong></div></div>
+</section>
+<section>
+<h2>Game servers</h2>
+<table><thead><tr><th>Room</th><th>Host</th><th>Scene</th><th>Players</th><th>State</th><th>Open for</th></tr></thead><tbody id="rooms"></tbody></table>
+</section>
+<section>
+<div class="row" style="justify-content:space-between"><h2 style="margin:0">Log</h2><button class="small" id="clear">Clear</button></div>
+<div id="log" role="log" aria-live="polite" style="margin-top:10px"></div>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let current={running:false,startedAt:null},rooms=[];
+const socket=new WebSocket(`ws://${location.host}/control`);
+const send=message=>socket.readyState===1&&socket.send(JSON.stringify(message));
+function addLog(entry){
+ const box=$('log'),stick=box.scrollTop+box.clientHeight>=box.scrollHeight-24,line=document.createElement('div');
+ line.className=entry.level;line.textContent=`${entry.time}  ${entry.text}`;box.append(line);
+ while(box.children.length>500)box.firstChild.remove();
+ if(stick)box.scrollTop=box.scrollHeight;
+}
+function urlRow(label,url){
+ const row=document.createElement('div');row.className='url';
+ const name=document.createElement('b');name.textContent=label;const code=document.createElement('code');code.textContent=url;
+ const copy=document.createElement('button');copy.className='small';copy.textContent='Copy';
+ copy.onclick=async()=>{try{await navigator.clipboard.writeText(url);copy.textContent='Copied';setTimeout(()=>copy.textContent='Copy',1200);}catch{}};
+ row.append(name,code,copy);return row;
+}
+function renderState(state){
+ current=state;
+ $('status').textContent=state.running?'Running':'Stopped';$('status').className='pill '+(state.running?'on':'off');
+ $('start').disabled=state.running;$('stop').disabled=!state.running;$('tunnel').disabled=state.running;
+ if(state.running)$('tunnel').checked=state.tunnelWanted;
+ const box=$('urls');box.replaceChildren();
+ if(state.localUrl)box.append(urlRow('Local',state.localUrl));
+ for(const url of state.lanUrls)box.append(urlRow('Network',url));
+ if(state.running&&state.tunnelWanted)box.append(state.publicUrl?urlRow('Public',state.publicUrl):Object.assign(document.createElement('small'),{textContent:'Public tunnel is starting...'}));
+ $('clients').textContent=state.clients;renderRooms(state.rooms);
+}
+function age(ms){const s=Math.max(0,Math.floor(ms/1000));return s<60?`${s}s`:s<3600?`${Math.floor(s/60)}m ${s%60}s`:`${Math.floor(s/3600)}h ${Math.floor(s%3600/60)}m`;}
+function renderRooms(list){
+ rooms=list;$('roomCount').textContent=list.length;const body=$('rooms');body.replaceChildren();
+ if(!list.length){const row=body.insertRow(),cell=row.insertCell();cell.colSpan=6;cell.className='empty';cell.textContent='No open rooms';return;}
+ for(const room of list){
+  const row=body.insertRow();
+  for(const text of [room.name,room.hostName,room.scene,`${room.players}/${room.max}`,room.inGame?'In game':room.joinable?'Open':'Full'])row.insertCell().textContent=text;
+  row.insertCell().textContent=age(Date.now()-room.createdAt);
+ }
+}
+setInterval(()=>{
+ $('uptime').textContent=current.running&&current.startedAt?age(Date.now()-current.startedAt):'-';
+ if(rooms.length)renderRooms(rooms);
+},1000);
+socket.onmessage=event=>{
+ const message=JSON.parse(event.data);
+ if(message.t==='hello'){$('log').replaceChildren();message.logs.forEach(addLog);}
+ else if(message.t==='log')addLog(message);
+ else if(message.t==='state'){renderState(message);}
+ else if(message.t==='rooms')renderRooms(message.rooms);
+ else if(message.t==='clients')$('clients').textContent=message.clients;
+};
+socket.onopen=()=>{$('start').disabled=false;};
+socket.onclose=()=>{$('banner').style.display='block';$('start').disabled=true;$('stop').disabled=true;$('status').textContent='Disconnected';$('status').className='pill off';};
+$('start').onclick=()=>send({t:'start',tunnel:$('tunnel').checked});
+$('stop').onclick=()=>send({t:'stop'});
+$('clear').onclick=()=>$('log').replaceChildren();
+</script>
+</body>
+</html>

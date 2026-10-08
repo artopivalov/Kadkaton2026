@@ -61,7 +61,7 @@ export function readyPortal(s){
  if(!s.players.length)return null;
  return s.portals.find(portal=>portal.available&&s.players.every(p=>p.nearPortal===portal.id))??null;
 }
-function effect(s,details,duration){s.effects.push({...Object.fromEntries(Object.entries(details).filter(([,v])=>v!==undefined)),life:duration,duration});}
+function effect(s,details,duration){s.effects.push({...Object.fromEntries(Object.entries(details).filter(([,v])=>v!==undefined)),...(s.casting!==undefined?{by:s.casting}:{}),life:duration,duration});}
 const isPlayer=(s,actor)=>s.players.includes(actor);
 const radiusOf=(s,actor)=>isPlayer(s,actor)?CONFIG.playerRadius:(ENEMY_BALANCE[actor.type]?.radius??CONFIG.targetRadius);
 const hitKey=(s,actor)=>`${isPlayer(s,actor)?'p':(s.enemies?.includes(actor)?'e':'t')}${actor.id}`;
@@ -119,7 +119,9 @@ function projectile(s,p,details){
  const fire=details.kind==='fire'?spellBalance(p):null;
  s.projectiles.push({id:s.nextId++,owner:p.id,x,y,angle,distance:0,power:p.charge,...attackProfile(p),...(fire?{splashRadius:fire.splashRadius*p.charge,splashDamage:scaledNormal(fire.splashDamage,CONFIG.minDamageFactor,p.charge)}:{}),...Object.fromEntries(Object.entries(details).filter(([,v])=>v!==undefined))});
 }
-export function release(s,id){
+// The caster is recorded while a spell resolves, so a client can show its own predicted effects.
+export function release(s,id){s.casting=id;try{releaseCast(s,id);}finally{delete s.casting;}}
+function releaseCast(s,id){
  const p=getPlayer(s,id);if(!p)return;
  const charge=p.charge,position={x:p.x,y:p.y},angle=p.angle,mana=p.mana,health=p.health,shots=s.shots;
  const double=hasRune(p,'double')&&p.wand&&p.mode!=='Safe'&&charge>0;
