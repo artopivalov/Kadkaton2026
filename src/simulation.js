@@ -120,7 +120,25 @@ function projectile(s,p,details){
  s.projectiles.push({id:s.nextId++,owner:p.id,x,y,angle,distance:0,power:p.charge,...attackProfile(p),...(fire?{splashRadius:fire.splashRadius*p.charge,splashDamage:scaledNormal(fire.splashDamage,CONFIG.minDamageFactor,p.charge)}:{}),...Object.fromEntries(Object.entries(details).filter(([,v])=>v!==undefined))});
 }
 // The caster is recorded while a spell resolves, so a client can show its own predicted effects.
-export function release(s,id){s.casting=id;try{releaseCast(s,id);}finally{delete s.casting;}}
+// Networked casts draw their randomness from (world seed, player, input number), so a client predicting a cast
+// and the host resolving it produce the same spread. Local play keeps the shared random stream.
+function castSeed(s,id,seq){let h=((s.seed??0)^Math.imul(id+1,0x9E3779B1)^Math.imul(seq+1,0x85EBCA6B))>>>0;h=Math.imul(h^(h>>>16),0x7feb352d);h=Math.imul(h^(h>>>15),0x846ca68b);return (h^(h>>>16))>>>0;}
+export function release(s,id){
+ const saved=s.rngState,seeded=s.castSeq!==undefined;if(seeded)s.rngState=castSeed(s,id,s.castSeq);
+ s.casting=id;try{releaseCast(s,id);}finally{delete s.casting;if(seeded)s.rngState=saved;}
+}
+// Moves a player's freshly cast projectiles forward in time. The host uses it to make up the network delay
+// of a client's cast, so its projectile appears where the client already shows it.
+export function fastForward(s,ownerId,fromId,seconds){
+ const mine=b=>b.owner===ownerId&&!b.enemy&&b.id>=fromId;let remaining=seconds;
+ while(remaining>1e-6){
+  const dt=Math.min(1/60,remaining);remaining-=dt;
+  const all=s.projectiles,moving=all.filter(mine);if(!moving.length)break;
+  s.projectiles=all.filter(b=>!mine(b));s.activeProjectiles=all;
+  for(const b of moving)if(advanceProjectile(s,b,dt))s.projectiles.push(b);
+  delete s.activeProjectiles;s.projectiles=s.projectiles.filter(b=>!b.dead);
+ }
+}
 function releaseCast(s,id){
  const p=getPlayer(s,id);if(!p)return;
  const charge=p.charge,position={x:p.x,y:p.y},angle=p.angle,mana=p.mana,health=p.health,shots=s.shots;
@@ -209,7 +227,9 @@ function stepPlayer(s,p,input,dt){
  if(p.health<=0){p.charge=0;delete p.hooked;return;}
  if(p.hooked){const hook=p.hooked,enemy=s.enemies?.find(e=>e.id===hook.owner&&e.health>0);if(enemy)pullActor(s,p,enemy.x,enemy.y,hook.speed*Math.min(dt,hook.life));hook.life-=dt;if(!enemy||hook.life<=0)delete p.hooked;}
  p.mana=Math.min(PLAYER_BALANCE.mana,p.mana+PLAYER_BALANCE.manaRegen*dt);
+ if(input.seq!==undefined)s.castSeq=input.seq;
  for(const command of input.commands??[])applyCommand(s,p.id,command);
+ delete s.castSeq;
  let {x=0,y=0}=input;const length=Math.hypot(x,y);
  if(length>1){x/=length;y/=length;}
  if(length>CONFIG.inputDeadzone){

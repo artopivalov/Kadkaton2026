@@ -23,7 +23,7 @@ export function createClient(link,profile,{now=()=>performance.now(),onNotice=()
  function reconcile(){
   const before=pred?getPlayer(pred,localId):null,bx=before?before.x+corr.x:0,by=before?before.y+corr.y:0;
   pred=cloneForPrediction(auth);
-  for(const frame of unacked)step(pred,{[localId]:frame.input},TICK);
+  for(const frame of unacked)step(pred,{[localId]:{...frame.input,seq:frame.seq}},TICK);
   const after=getPlayer(pred,localId);
   // Smooth over disagreements with the host instead of snapping the character.
   if(before&&after){const dx=bx-after.x,dy=by-after.y,d=Math.hypot(dx,dy);corr=d>.01&&d<=NET_BALANCE.maxCorrection?{x:dx,y:dy}:{x:0,y:0};}
@@ -55,9 +55,17 @@ export function createClient(link,profile,{now=()=>performance.now(),onNotice=()
   const me=pred?getPlayer(pred,localId):null;
   rs.players=lerpList(a.snap.players,b.snap.players,alpha).map(p=>p.id===localId&&me?{...p,x:me.x+corr.x,y:me.y+corr.y,angle:me.angle,mode:me.mode,charge:me.charge,mana:me.mana}:p);
   rs.enemies=lerpList(a.snap.enemies,b.snap.enemies,alpha);
-  rs.projectiles=lerpList(a.snap.projectiles,b.snap.projectiles,alpha);
-  rs.items=b.snap.items;rs.walls=b.snap.walls;rs.targets=b.snap.targets;rs.portals=b.snap.portals;rs.pedestals=b.snap.pedestals;
-  rs.effects=b.snap.effects.map(e=>({...e,life:Math.min(e.duration,e.life+ahead)}));
+  rs.projectiles=lerpList(a.snap.projectiles,b.snap.projectiles,alpha).filter(e=>e.owner!==localId||e.enemy);
+  rs.targets=b.snap.targets;rs.portals=b.snap.portals;rs.pedestals=b.snap.pedestals;
+  // Things the local player created are not held back for interpolation: they are taken from the newest
+  // snapshot and advanced by the time that has passed since, so a cast never seems to wait for the network.
+  const newest=b0.snap,age=Math.max(0,Math.min(.3,(at-offset)/1000-newest.time+(rtt??0)/2000));
+  rs.items=newest.items;rs.walls=newest.walls;
+  rs.projectiles.push(...newest.projectiles.filter(e=>e.owner===localId&&!e.enemy).map(e=>{
+   const travel=Math.min((e.speed??0)*age,Math.max(0,(e.range??Infinity)-(e.distance??0)));
+   return {...e,x:e.x+Math.cos(e.angle)*travel,y:e.y+Math.sin(e.angle)*travel};
+  }));
+  rs.effects=[...b.snap.effects.filter(e=>e.by!==localId).map(e=>({...e,life:Math.min(e.duration,e.life+ahead)})),...newest.effects.filter(e=>e.by===localId).map(e=>({...e,life:e.life-age})).filter(e=>e.life>0)];
   rs.telegraphs=b.snap.telegraphs.map(e=>({...e,delay:e.delay+ahead}));
   if(pred){
    // The player's own casts show at once; the host's versions replace them when the host catches up.
@@ -74,13 +82,13 @@ export function createClient(link,profile,{now=()=>performance.now(),onNotice=()
    if(closed)return null;
    if((at-lastSnapAt)/1000>NET_BALANCE.silenceTimeout){fail('Connection to the host was lost.');return null;}
    const dt=lastFrame===null?0:Math.min((at-lastFrame)/1000,.1);lastFrame=at;
-   if((at-lastPing)/1000>=NET_BALANCE.pingInterval){lastPing=at;link.send({t:'ping',ts:at},false);}
+   if((at-lastPing)/1000>=NET_BALANCE.pingInterval){lastPing=at;link.send({t:'ping',ts:at,rtt:rtt===null?0:Math.round(rtt)},false);}
    if(!this.ready)return null;
    accumulator+=dt;
    while(accumulator>=TICK){
     const input=getInput(),frame={seq:++seq,input:{x:input.x,y:input.y,held:input.held,commands:input.commands??[]}};
     unacked.push(frame);if(unacked.length>NET_BALANCE.maxUnacked)unacked.shift();
-    step(pred,{[localId]:frame.input},TICK);
+    step(pred,{[localId]:{...frame.input,seq:frame.seq}},TICK);
     link.send({t:'in',frames:unacked.slice(-NET_BALANCE.inputRedundancy).map(f=>({seq:f.seq,...f.input}))},false);
     accumulator-=TICK;
    }

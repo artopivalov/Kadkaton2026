@@ -2,7 +2,7 @@
 import {generateLocation} from '../generator.js';
 import {NET_BALANCE} from '../balance.js';
 const LISTS=['players','items','pedestals','portals','walls','projectiles','effects','targets','enemies','telegraphs'];
-const SCALARS=['time','nextId','rngState','scene','spawn','world','completed','debugRarity','debugRuneEffect','runeStation','shots'];
+const SCALARS=['time','seed','nextId','rngState','scene','spawn','world','completed','debugRarity','debugRuneEffect','runeStation','shots'];
 const near=(e,x,y,radius)=>e.x===undefined||Math.hypot(e.x-x,e.y-y)<=radius||(e.x2!==undefined&&Math.hypot(e.x2-x,e.y2-y)<=radius);
 // The map is rebuilt from its seed on each client; only its progress travels.
 export function mapDescriptor(s){return s.map?{loc:s.map.location,seed:s.map.seed,party:s.map.partySize}:null;}

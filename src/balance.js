@@ -105,7 +105,7 @@ export const BIOME_NEW_ENEMIES={forest:['jumper'],cave:['jumper','hooker'],libra
 export const BIOME_RARE_ENEMIES={forest:'mushroomKeeper',cave:'crystalShell',library:'scribe'};
 // Network tuning. The host simulates at the fixed tick; snapshots are sent every few ticks.
 export const NET_BALANCE=Object.freeze({
- tick:1/60,snapshotEvery:3,viewRadius:2600,interpolationDelay:.1,inputRedundancy:4,maxUnacked:180,
+ tick:1/60,snapshotEvery:2,viewRadius:2600,interpolationDelay:.075,maxCompensation:.15,inputRedundancy:4,maxUnacked:180,
  hostQueueLimit:8,hostCatchUpAt:4,hostGapWaitTicks:2,pingInterval:1,silenceTimeout:6,connectTimeout:15,
  correctionRate:12,maxCorrection:160,maxPlayers:8,chunkSize:14000,
  stunServers:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']

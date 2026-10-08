@@ -1,6 +1,6 @@
 // Authoritative side of a session. It owns the world state, feeds remote inputs into the simulation
 // and sends every client a snapshot of its surroundings.
-import {addPlayer,removePlayer,getPlayer} from '../simulation.js';
+import {addPlayer,removePlayer,getPlayer,fastForward} from '../simulation.js';
 import {buildSnapshot} from './snapshot.js';
 import {NET_BALANCE} from '../balance.js';
 const IDLE=Object.freeze({x:0,y:0,held:false});
@@ -20,7 +20,7 @@ export function createHost(state,{maxPlayers=NET_BALANCE.maxPlayers,onJoin=()=>{
    }
    peer.queue.sort((a,b)=>a.seq-b.seq);
    if(peer.queue.length>NET_BALANCE.hostQueueLimit*4)peer.queue.length=NET_BALANCE.hostQueueLimit*4;
-  }else if(message.t==='ping')peer.link.send({t:'pong',ts:message.ts},false);
+  }else if(message.t==='ping'){peer.rtt=Math.max(0,Math.min(1000,Number(message.rtt)||0));peer.link.send({t:'pong',ts:message.ts},false);}
   else if(message.t==='lobby'&&peer.playerId!==null)onRequest('lobby',peer.playerId);
  }
  // A silent client stops moving after a moment instead of walking on forever.
@@ -34,13 +34,16 @@ export function createHost(state,{maxPlayers=NET_BALANCE.maxPlayers,onJoin=()=>{
   if(head.seq!==peer.last+1&&peer.starved<NET_BALANCE.hostGapWaitTicks){peer.starved++;return repeat(peer);}
   peer.starved=0;peer.silent=0;peer.queue.shift();peer.last=peer.ack=head.seq;
   peer.input={x:head.x,y:head.y,held:head.held};
-  return {...peer.input,commands:[...peer.carry.splice(0),...head.commands]};
+  const commands=[...peer.carry.splice(0),...head.commands];
+  // A cast is resolved on this tick; remember where new projectiles start so they can be caught up.
+  if(commands.some(c=>c.type==='release'))peer.castFrom=state.nextId;
+  return {...peer.input,commands,seq:head.seq};
  }
  return {
   peers,
   get tick(){return tick;},
   addPeer(id,link){
-   const peer={id,link,playerId:null,name:'',queue:[],carry:[],last:0,ack:0,starved:0,silent:0,input:IDLE};
+   const peer={id,link,playerId:null,name:'',queue:[],carry:[],last:0,ack:0,starved:0,silent:0,rtt:0,castFrom:null,input:IDLE};
    link.onmessage=message=>receive(peer,message);
    link.onclose=()=>this.removePeer(id);
    peers.set(id,peer);return peer;
@@ -59,6 +62,8 @@ export function createHost(state,{maxPlayers=NET_BALANCE.maxPlayers,onJoin=()=>{
   // Call after every simulation tick.
   afterTick(){
    tick++;
+   // The client cast this one-way delay ago: bring its projectiles to where the client already shows them.
+   for(const peer of peers.values())if(peer.castFrom!==null){if(peer.playerId!==null)fastForward(state,peer.playerId,peer.castFrom,Math.min(peer.rtt/2000,NET_BALANCE.maxCompensation));peer.castFrom=null;}
    if(tick%NET_BALANCE.snapshotEvery!==0)return;
    for(const peer of peers.values())if(peer.playerId!==null)peer.link.send(buildSnapshot(state,peer.playerId,{tick,ack:peer.ack}),false);
   },

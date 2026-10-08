@@ -128,3 +128,35 @@ test('a scene change on the host (lobby to a generated location) reaches the cli
  const poi=t.state.map.pois[0];poi.completed=true;t.run(20);assert.equal(t.view.map.pois[0].completed,true);
  const me=getPlayer(t.view,t.client.localId),host=getPlayer(t.state,t.client.localId);assert.ok(Math.hypot(me.x-host.x,me.y-host.y)<2);
 });
+function castScene(latency){
+ const t=session({latency,scene:debugScene});t.run(240);const id=t.client.localId;
+ getPlayer(t.state,id).wand={id:901,type:'ice'};t.run(30);
+ t.command({type:'setMode',mode:'Normal'});t.setInput({x:0,y:0,held:true});t.run(80);t.setInput({x:0,y:0,held:false});
+ return {t,id};
+}
+test('a predicted cast has the same spread as the host version',()=>{
+ const {t,id}=castScene(70);
+ t.command({type:'release'});t.frame();
+ const ghost=t.view.projectiles.filter(b=>b.owner===id).map(b=>b.angle).sort();
+ assert.ok(ghost.length>=6,'the cast is visible at once');
+ for(let i=0;i<40&&!t.state.projectiles.some(b=>b.owner===id);i++)t.frame();
+ const real=t.state.projectiles.filter(b=>b.owner===id).map(b=>b.angle).sort();
+ assert.equal(real.length,ghost.length);real.forEach((angle,i)=>assert.ok(Math.abs(angle-ghost[i])<.006,`angle ${angle} vs ${ghost[i]}`));
+});
+test('the player\'s own projectiles never vanish or jump when the host version takes over',()=>{
+ for(const latency of [40,120]){
+  const {t,id}=castScene(latency);t.command({type:'release'});
+  const centre=()=>{const own=t.view.projectiles.filter(b=>b.owner===id);return own.length?{n:own.length,x:own.reduce((s,b)=>s+b.x,0)/own.length,y:own.reduce((s,b)=>s+b.y,0)/own.length}:null;};
+  t.frame();let last=centre();assert.ok(last);
+  for(let i=0;i<35;i++){t.frame();const now=centre();assert.ok(now,`gap in own projectiles at frame ${i}, latency ${latency}`);
+   assert.ok(Math.hypot(now.x-last.x,now.y-last.y)<30,`jump of ${Math.hypot(now.x-last.x,now.y-last.y).toFixed(1)}px at frame ${i}, latency ${latency}`);last=now;}
+ }
+});
+test('the host catches a client projectile up by the network delay',()=>{
+ const {t,id}=castScene(100);t.command({type:'release'});t.frame();
+ const ghost=t.view.projectiles.find(b=>b.owner===id);
+ for(let i=0;i<40&&!t.state.projectiles.some(b=>b.owner===id);i++)t.frame();
+ const real=t.state.projectiles.find(b=>b.owner===id);
+ assert.ok(real.distance>50,`projectile was advanced (${real.distance.toFixed(1)}px)`);
+ assert.ok(real.distance<=NET_BALANCE.maxCompensation*real.speed+8);
+});
