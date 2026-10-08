@@ -1,8 +1,10 @@
+import {createColorPicker} from './color-picker.js';
+import {defaultPlayerName} from './profile.js';
 import {enterBattleRoyale,cameraPlayer,screenInput} from './battle-royale.js';
 import {createFeedback,capturePoses,interpolatePoses} from './feedback.js';
 import {createAudio} from './audio.js';
 import {RARITIES,SPECIAL_RUNES,ENEMY_BALANCE} from './balance.js';
-import {rarityColor} from './items.js';
+import {rarityColor,runeLabel} from './items.js';
 import {enterLocation} from './locations.js';
 import {configureLobby} from './scenes/lobby.js';
 import {CAMERA_BALANCE} from './balance.js';
@@ -17,7 +19,9 @@ import {acceptPeer,connectToHost} from './net/rtc.js';
 const audio=createAudio();
 const feedback=createFeedback({sound:(...args)=>audio.play(...args),reducedMotion:matchMedia('(prefers-reduced-motion: reduce)').matches});
 window.addEventListener('pointerdown',audio.unlock);
-window.addEventListener('keydown',audio.unlock);
+window.addEventListener('keydown',audio.unlock);audio.setMusicActive(!document.hidden);
+// Start immediately when autoplay is allowed; input listeners retry if the browser blocks it.
+if(!document.hidden)audio.unlock();
 const soundButton=document.createElement('button');soundButton.type='button';soundButton.id='sound-toggle';soundButton.textContent=audio.muted?'Sound off':'Sound on';soundButton.setAttribute('aria-pressed',String(!audio.muted));soundButton.addEventListener('click',()=>{const muted=audio.toggle();soundButton.textContent=muted?'Sound off':'Sound on';soundButton.setAttribute('aria-pressed',String(!muted));});document.querySelector('#game').append(soundButton);
 const $=selector=>document.querySelector(selector);
 const menu=$('#menu'),game=$('#game'),canvas=$('#canvas'),ctx=canvas.getContext('2d'),joystick=$('#joystick'),stick=$('#stick');
@@ -25,9 +29,11 @@ let previousPoses=null;
 let view={zoom:CAMERA_BALANCE.default},targetZoom=CAMERA_BALANCE.default;
 let session=null,sceneKey='',state=null,localId=null,pending=[],accumulator=0,activePointer=null,vector={x:0,y:0},keys=new Set(),lastTime=0,noticeUntil=0;
 try{const profile=JSON.parse(localStorage.getItem('kadkaton.profile'));if(profile){$('#name').value=String(profile.name||'').slice(0,24);if(/^#[0-9a-f]{6}$/i.test(profile.color))$('#color').value=profile.color;}}catch{}
+if(!$('#name').value.trim())$('#name').value=defaultPlayerName();
 function notice(message){$('#notice').textContent=message;noticeUntil=performance.now()+2300;}
 function clearInput(){activePointer=null;modePointer=null;vector={x:0,y:0};keys.clear();stick.style.transform='';joystick.hidden=true;pending.length=0;if(state)pending.push({type:'cancel'});}
 let spectatedId=null;
+const freeCamActive=()=>{const p=state&&me();return Boolean(p&&p.health<=0&&state.players.length>1&&!state.battleRoyale&&!state.scene.viewer&&!['lobby','debug'].includes(state.scene.id)&&!state.completed&&state.players.some(q=>q.health>0));};
 const battleStatus=document.createElement('div');battleStatus.id='battle-status';battleStatus.hidden=true;game.append(battleStatus);
 const spectateButton=document.createElement('button');spectateButton.id='spectate-next';spectateButton.type='button';spectateButton.textContent='Next player';spectateButton.hidden=true;game.append(spectateButton);
 spectateButton.addEventListener('click',()=>{const living=state.players.filter(p=>p.health>0),current=cameraPlayer(state,localId,spectatedId);spectatedId=living[(living.findIndex(p=>p.id===current?.id)+1)%living.length]?.id??null;});
@@ -40,7 +46,7 @@ function updateUI(){
  const p=me();if(!p)return;
  $('#rune-effect').disabled=RARITIES.indexOf(state.debugRarity??'Common')<2;
  $('#retry').textContent=state.scene.id==='debug'?'Reset playground':'Return to lobby';
- $('#retry').hidden=state.scene.viewer||(state.battleRoyale?!state.completed:p.health>0&&!state.completed);
+ $('#retry').hidden=state.scene.viewer||(state.battleRoyale?!state.completed:(p.health>0||freeCamActive())&&!state.completed);
  const battle=state.battleRoyale;const watching=cameraPlayer(state,localId,spectatedId);
  battleStatus.hidden=!battle;spectateButton.hidden=!battle||p.health>0||state.completed;
  if(battle){const result=battle.result;const remaining=Math.max(0,Math.ceil(60-(state.time-battle.startedAt)));battleStatus.textContent=result?(result.kind==='draw'?'Draw':result.kind==='winner'?`${result.name} wins!`:`Survived ${result.seconds.toFixed(1)} seconds`):`${remaining}s until full lava · ${state.players.filter(p=>p.health>0).length} alive${p.health<=0?` · Watching ${watching?.name??'arena'}`:''}`;}
@@ -52,7 +58,10 @@ function updateUI(){
  $('#rune-slot').setAttribute('aria-label',p.rune?'Rune slot: tap to drop':'Rune slot: empty');
  $('#wand-slot').style.borderColor=rarityColor(p.wand);
  $('#rune-slot').title='';
+ const runeText=p.rune?`${p.rune.rarity??'Common'} rune · ${runeLabel(p.rune)}`:'';
+ $('#rune-info').textContent=runeText;$('#rune-info').hidden=!p.rune;
  const definition=p.wand?WANDS[p.wand.type]:null;
+ $('#mode-help').textContent=!definition?'Empty wand slot · move close to a wand to pick it up.':p.mode==='Safe'?`${definition.name} · Safe · no casting`:`${definition.name} · ${p.mode} · ${p.mode==='Normal'?definition.normalHelp:definition.specialHelp}`;
  const wandName=definition?(definition.name.endsWith('Wand')?definition.name:`${definition.name} wand`):'';
  const slotHTML=(p.wand?wandIcon(p.wand.type):'<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M9 32 29 12" stroke="#78889e" stroke-width="5"/></svg>')+`<small>${definition?definition.name:'Empty wand'}</small>`;
  if($('#wand-slot').innerHTML!==slotHTML)$('#wand-slot').innerHTML=slotHTML;
@@ -78,8 +87,8 @@ modeSlider.addEventListener('keydown',event=>{
 });
 const preview=$('#character-preview'),previewContext=preview.getContext('2d');
 function updatePreview(){renderPreview(previewContext,$('#color').value);}
-$('#color').addEventListener('input',updatePreview);$('#color').addEventListener('change',updatePreview);updatePreview();
-function readProfile(){const profile={name:$('#name').value.trim()||'Wizard',color:$('#color').value};try{localStorage.setItem('kadkaton.profile',JSON.stringify(profile));}catch{}return profile;}
+createColorPicker($('#color-palette'),$('#color-hue'),$('#color'),updatePreview);updatePreview();
+function readProfile(){const name=$('#name').value.trim()||defaultPlayerName();$('#name').value=name;const profile={name,color:$('#color').value};try{localStorage.setItem('kadkaton.profile',JSON.stringify(profile));}catch{}return profile;}
 function showGame(){audio.setMusicActive(!document.hidden);feedback.reset();clearInput();pending.length=0;accumulator=0;menu.hidden=true;game.hidden=false;syncScene();sceneKey=state.scene.id+state.scene.title;updateUI();game.setAttribute('aria-label',state.scene.title);canvas.setAttribute('aria-label',state.scene.title);notice(state.scene.description);}
 $('#start-form').addEventListener('submit',event=>{event.preventDefault();$('#menu-message').textContent='';state=createScene(readProfile());localId=state.players[0].id;showGame();});
 $('#exit').addEventListener('click',()=>leaveSession());
@@ -100,6 +109,9 @@ function position(event){let x=event.clientX-gestureOrigin.x,y=event.clientY-ges
  if(length>radius){gestureOrigin.x+=x*(1-radius/length);gestureOrigin.y+=y*(1-radius/length);x*=radius/length;y*=radius/length;const rect=game.getBoundingClientRect();joystick.style.left=`${gestureOrigin.x-rect.left}px`;joystick.style.top=`${gestureOrigin.y-rect.top}px`;}vector={x:x/radius,y:y/radius};stick.style.transform=`translate(${vector.x*radius}px,${vector.y*radius}px)`;}
 let gestureOrigin={x:0,y:0};
 // Only the canvas starts a gesture; UI owns its own pointer events.
+game.addEventListener('touchmove',event=>{if(!/INPUT|TEXTAREA|SELECT/.test(event.target.tagName))event.preventDefault();},{passive:false});
+game.addEventListener('selectstart',event=>{if(!/INPUT|TEXTAREA/.test(event.target.tagName))event.preventDefault();});
+game.addEventListener('contextmenu',event=>event.preventDefault());
 canvas.addEventListener('pointerdown',event=>{
  if(activePointer!==null)return;event.preventDefault();activePointer=event.pointerId;canvas.setPointerCapture(event.pointerId);
  gestureOrigin={x:event.clientX,y:event.clientY};const rect=game.getBoundingClientRect();joystick.style.left=`${event.clientX-rect.left}px`;joystick.style.top=`${event.clientY-rect.top}px`;joystick.hidden=false;vector={x:0,y:0};stick.style.transform='';
@@ -111,7 +123,7 @@ const movementKeys=new Set(['w','a','s','d','arrowup','arrowleft','arrowdown','a
 function keyboardVector(){return {x:Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft')),y:Number(keys.has('s')||keys.has('arrowdown'))-Number(keys.has('w')||keys.has('arrowup'))};}
 window.addEventListener('keydown',event=>{const k=event.key.toLowerCase();if(!state||!movementKeys.has(k)||event.target===modeSlider||/INPUT|TEXTAREA|SELECT/.test(event.target.tagName))return;event.preventDefault();keys.add(k);});
 window.addEventListener('keyup',event=>{const k=event.key.toLowerCase();if(!movementKeys.has(k))return;const had=keys.delete(k);if(had&&state&&keys.size===0&&activePointer===null)pending.push({type:'release'});});
-window.addEventListener('blur',clearInput);document.addEventListener('visibilitychange',()=>{if(document.hidden)clearInput();audio.setMusicActive(Boolean(state)&&!game.hidden&&!document.hidden);});
+window.addEventListener('blur',clearInput);document.addEventListener('visibilitychange',()=>{if(document.hidden)clearInput();audio.setMusicActive(!document.hidden);});
 // Local input becomes one input frame; discrete actions ride along as commands.
 function localInput(){return screenInput({...((state?.battleRoyale&&(me()?.health<=0||state.completed))?{x:0,y:0}:activePointer!==null?vector:keyboardVector()),held:activePointer!==null||keys.size>0,commands:pending.splice(0)},state?.battleRoyale?(me()?.cameraAngle??0):0);}
 // ---- Online play -------------------------------------------------------------------------------
@@ -130,13 +142,13 @@ async function connectOrExplain(){
  catch(error){const tried=serverUrl();setNetStatus(`${error.message} ${tried?`Tried ${tried}. Open the game from the address shown in the server panel (not from a file or another web server).`:'Open the game from the address shown in the server panel, not from a file.'}`);return null;}
 }
 function leaveSession(message=''){
- audio.setMusicActive(false);
+ audio.setMusicActive(!document.hidden);
  const current=session;session=null;current?.client?.close();current?.host?.close();current?.match?.close();
  clearInput();state=null;localId=null;sceneKey='';game.hidden=true;menu.hidden=false;
  startForm.hidden=false;netPanel.hidden=true;$('#menu-hint').hidden=false;$('#menu-message').textContent=message;
  if(!message)$('#name').focus();
 }
-$('#host-game').addEventListener('click',()=>{openPanel('host');$('#room-name').value||($('#room-name').value=`${$('#name').value.trim()||'Wizard'}'s game`);});
+$('#host-game').addEventListener('click',()=>{openPanel('host');$('#room-name').value||($('#room-name').value=`${readProfile().name}'s game`);});
 $('#join-game').addEventListener('click',async()=>{
  openPanel('join');renderRooms([]);const match=await connectOrExplain();if(!match)return;
  if(netPanel.hidden||$('#net-join').hidden){match.close();return;}
@@ -147,8 +159,8 @@ function renderRooms(rooms){
  const list=$('#room-list');list.replaceChildren();$('#room-empty').textContent=rooms.length?'':(panelMatch?'No open rooms yet. Ask a friend to host one.':'');
  for(const room of rooms){
   const item=document.createElement('li'),meta=document.createElement('div'),name=document.createElement('strong'),detail=document.createElement('small'),button=document.createElement('button');
-  meta.className='meta';name.textContent=room.name;detail.textContent=`${room.hostName} · ${room.players}/${room.max} players${room.inGame?' · in game':''}`;
-  button.type='button';button.textContent='Join';button.disabled=!room.joinable;button.title=room.joinable?'':room.inGame?'The game has already started':'Room is full';
+  meta.className='meta';name.textContent=room.name;detail.textContent=`${room.hostName} · ${room.players}/${room.max} players${room.inGame?' · Session already started':''}`;
+  button.type='button';button.textContent='Join';button.disabled=!room.joinable;button.title=room.joinable?'':room.inGame?'Session already started':'Room is full';
   button.addEventListener('click',()=>joinRoom(room));meta.append(name,detail);item.append(meta,button);list.append(item);
  }
 }
@@ -203,13 +215,16 @@ function advance(now,dt){
 function frame(now){
  const dt=Math.min((now-lastTime)/1000||0,.1);lastTime=now;
  if(session?.role==='client'||(state&&!document.hidden)){
-  const before=state&&me()?.wand,previousPortal=state&&me()?.nearPortal;
+  const before=state&&me()?.wand,beforeRune=state&&me()?.rune,previousPortal=state&&me()?.nearPortal;
   advance(now,dt);
   if(state&&!(session?.waiting)){
    view.zoom+=(targetZoom-view.zoom)*(1-Math.exp(-CAMERA_BALANCE.smoothing*dt));
    const player=me();
+   if(freeCamActive()){if(view.x===undefined){view.x=player.x;view.y=player.y;}const v=activePointer!==null?vector:keyboardVector();view.x+=v.x*CAMERA_BALANCE.flightSpeed*dt;view.y+=v.y*CAMERA_BALANCE.flightSpeed*dt;}
+   else if(!state.scene.viewer&&view.x!==undefined){view.x=undefined;view.y=undefined;}
    if(player){
     if(player.wand&&before?.id!==player.wand.id)notice(`${WANDS[player.wand.type].name} equipped`);
+    if(player.rune&&beforeRune?.id!==player.rune.id)notice(`${player.rune.rarity??'Common'} rune · ${runeLabel(player.rune)}`);
     if(player.nearPortal&&player.nearPortal!==previousPortal)notice('All players must enter the same portal.');
    }
    if(session?.role==='client'&&sceneKey!==state.scene.id+state.scene.title){sceneKey=state.scene.id+state.scene.title;syncScene();notice(state.scene.description);}

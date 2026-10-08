@@ -32,7 +32,7 @@ export const EARTH_BALANCE = Object.freeze({
 });
 export const TEST_BALANCE = Object.freeze({
  chargeTime:1,specialChargeTime:2,projectileSpeed:330,projectileRange:350,
- projectileRadius:2,chargedRadiusBonus:5,normalPush:24,specialRadius:150,specialDuration:.6
+ projectileRadius:2,chargedRadiusBonus:5,normalPush:48,specialRadius:150,specialDuration:.6
 });
 export const SCENE_BALANCE = Object.freeze({pedestalRadius:38,portalRadius:50,spawnSpacing:70});
 // Friendly fire deals half damage; self-damage stays undefined, so attackers never hit themselves.
@@ -90,7 +90,7 @@ export const SPECIAL_RUNE_BALANCE={minTier:2,chance:.3,maxEffects:1,copyOffset:2
 export const SPECIAL_RUNES={
  double:{name:'Double cast',stats:{}},healing:{name:'Healing',stats:{}},force:{name:'Super knockback',stats:{}},haste:{name:'Super fast charge',stats:{chargeTime:.2}},huge:{name:'Huge size',stats:{size:3}},power:{name:'Power for mana',stats:{damage:2,manaCost:3}},reach:{name:'Long range',stats:{range:3,chargeTime:2}},swift:{name:'Swift projectile',stats:{speed:3,size:.5}},economy:{name:'Economy',stats:{manaCost:.25,damage:.5}},overload:{name:'Overload',stats:{damage:3,chargeTime:3}},unstable:{name:'Instability',stats:{}}
 };
-export const COMBAT_BALANCE={basePush:12,pierceFalloff:.75,pierceMin:.2,telegraphFill:.18,telegraphStroke:.8,rayDuration:.22,fieldTick:.5,objectSpacing:15};
+export const COMBAT_BALANCE={basePush:36,pierceFalloff:.75,pierceMin:.2,telegraphFill:.18,telegraphStroke:.8,rayDuration:.22,fieldTick:.5,objectSpacing:15};
 export const ENEMY_SPAWN_BALANCE={specialChance:.2,progressSpecialChance:.15,rareChance:.05,combatProgress:4,spawnMinRadius:100,spawnRadiusSpan:160,corridorSpacing:50,initialCooldown:1,rareLeash:.9};
 Object.assign(ENEMY_BALANCE,{
  jumper:{name:'Leaping skeleton',health:28,damage:8,speed:80,radius:18,range:260,cooldown:3.2,behavior:'jump',warning:.9,flightDuration:.65,landingRadius:55},

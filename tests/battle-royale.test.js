@@ -67,7 +67,7 @@ test('return and repeat remove bots and reset HP and camera without stacking mod
  enterBattleRoyale(s);assert.equal(s.players.length,3);assert.equal(s.players[0].health,1000);enterLocation(s,'forest');assert.equal(s.players.length,1);assert.equal(s.players[0].maxHealth,undefined);
 });
 test('render uses each fixed camera rotation and max HP bars, with upright labels',()=>{
- const s=arena(4),p=s.players[1];p.health=500;const calls=[];const ctx=new Proxy({measureText:t=>({width:t.length*8})},{get:(target,key)=>key in target?target[key]:(...args)=>calls.push({key,args})});
+ const s=arena(4),p=s.players[1];p.health=500;const calls=[];const ctx=new Proxy({measureText:t=>({width:t.length*8}),createRadialGradient:()=>({addColorStop(){}})},{get:(target,key)=>key in target?target[key]:(...args)=>calls.push({key,args})});
  render(ctx,s,400,700,p.id,{zoom:.72});const transform=calls.filter(c=>c.key==='setTransform').at(-1).args;close(transform[0],0);assert.ok(Math.abs(transform[1])>.1);assert.ok(calls.some(c=>c.key==='fillRect'&&c.args[0]===p.x-28&&c.args[2]===28&&c.args[3]===8));assert.ok(calls.some(c=>c.key==='rotate'&&c.args[0]===-p.cameraAngle));
 });
 

@@ -1,3 +1,4 @@
+import {defaultPlayerName} from '../profile.js';
 // Authoritative side of a session. It owns the world state, feeds remote inputs into the simulation
 // and sends every client a snapshot of its surroundings.
 import {addPlayer,removePlayer,getPlayer,fastForward} from '../simulation.js';
@@ -11,7 +12,7 @@ export function createHost(state,{maxPlayers=NET_BALANCE.maxPlayers,onJoin=()=>{
   if(message.t==='hello'&&peer.playerId===null){
    if(state.battleRoyale){peer.link.send({t:'bye',reason:'The match has already started.'},true);peer.link.close();return;}
    if(state.players.length>=maxPlayers){peer.link.send({t:'bye',reason:'The room is full.'},true);peer.link.close();return;}
-   const name=String(message.name??'Wizard').slice(0,24)||'Wizard',color=/^#[0-9a-f]{6}$/i.test(message.color)?message.color:'#79a9ff';
+   const name=String(message.name??'').trim().slice(0,24)||defaultPlayerName(),color=/^#[0-9a-f]{6}$/i.test(message.color)?message.color:'#79a9ff';
    const player=addPlayer(state,{name,color});peer.playerId=player.id;peer.name=name;
    peer.link.send({t:'welcome',id:player.id},true);onJoin(name,player.id);
   }else if(message.t==='in'&&peer.playerId!==null&&Array.isArray(message.frames)){

@@ -10,7 +10,7 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 export async function packageGame(){
  const serverUrl=await configuredServerUrl();
  if(!serverUrl)throw new Error('No server address is configured. Copy kadkaton.config.example.json to kadkaton.config.json and put your server address in it (or set KADKATON_SERVER_URL).');
- const output=await build('game',{serverUrl}),archive=path.join(root,'dist','Kadkaton-game.zip');
+ const output=await build('game',{serverUrl}),archive=path.join(root,'dist','Ebaboba-game.zip');
  await rm(archive,{force:true});
  await run('zip',['-qr',archive,'.'],{cwd:output});
  return {output,archive,serverUrl,size:(await stat(archive)).size};

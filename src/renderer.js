@@ -1,3 +1,4 @@
+import {drawBattleArena,drawArenaCover} from './art/battle-royale.js';
 import {drawLobby,drawLobbyPortal} from './art/lobby.js';
 import {safeRadius,cameraPlayer} from './battle-royale.js';
 import {drawElementProjectile,drawElementEffect} from './elements.js';
@@ -19,7 +20,7 @@ function wand(ctx,x,y,angle,type='fire'){
 }
 export function drawCharacter(ctx,p){drawWizard(ctx,p,WANDS[p.wand?.type??'test'].color);}
 export function renderPreview(ctx,color){
- ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,160,110);ctx.save();ctx.translate(80,60);ctx.scale(1.3,1.3);
+ ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,160,110);ctx.save();ctx.strokeStyle='#73908470';ctx.lineWidth=2;circle(ctx,80,60,44);ctx.stroke();circle(ctx,80,60,38);ctx.stroke();ctx.translate(80,60);ctx.scale(1.3,1.3);
  drawCharacter(ctx,{x:0,y:0,angle:-Math.PI/2,color,wand:{type:'fire'}});ctx.restore();
 }
 function renderProjectile(ctx,b){
@@ -82,12 +83,14 @@ function drawAim(ctx,p){
 export function render(ctx,s,width,height,localId,view={}){
  const world=s.world??{width:CONFIG.worldWidth,height:CONFIG.worldHeight},player=cameraPlayer(s,localId,view.spectatedId);
  const scale=height/CONFIG.worldHeight*(view.zoom??CONFIG.cameraZoom),visibleWidth=width/scale,visibleHeight=height/scale;
- const cameraX=(view.x??player.x)-visibleWidth/2,cameraY=(view.y??player.y)-visibleHeight/2;
+ // Following cameras leave more room ahead; free-camera views remain centered.
+ const screenAnchorY=view.y===undefined&&!s.scene.viewer?2/3:1/2;
+ const cameraX=(view.x??player.x)-visibleWidth/2,cameraY=(view.y??player.y)-visibleHeight*screenAnchorY;
  const visible=(x,y,r=300)=>s.battleRoyale||x+r>cameraX&&x-r<cameraX+visibleWidth&&y+r>cameraY&&y-r<cameraY+visibleHeight;
  ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle=s.map?BIOME_THEMES[s.map.location].outside:'#101820';ctx.fillRect(0,0,width,height);
  const offset=view.feedback?.offset??{x:0,y:0};
  const cameraAngle=s.battleRoyale?(player.cameraAngle??0):0,c=Math.cos(cameraAngle),sn=Math.sin(cameraAngle);
- if(s.battleRoyale)ctx.setTransform(scale*c,scale*sn,-scale*sn,scale*c,width/2-scale*(c*(view.x??player.x)-sn*(view.y??player.y))+offset.x*(view.dpr??1),height/2-scale*(sn*(view.x??player.x)+c*(view.y??player.y))+offset.y*(view.dpr??1));
+ if(s.battleRoyale)ctx.setTransform(scale*c,scale*sn,-scale*sn,scale*c,width/2-scale*(c*(view.x??player.x)-sn*(view.y??player.y))+offset.x*(view.dpr??1),height*screenAnchorY-scale*(sn*(view.x??player.x)+c*(view.y??player.y))+offset.y*(view.dpr??1));
  else ctx.setTransform(scale,0,0,scale,-cameraX*scale+offset.x*(view.dpr??1),-cameraY*scale+offset.y*(view.dpr??1));
  if(s.map){
   const theme=BIOME_THEMES[s.map.location];
@@ -107,6 +110,8 @@ export function render(ctx,s,width,height,localId,view={}){
    ctx.fillStyle=poi.completed?'#e9b65c':'#7e7054';ctx.fillRect(poi.x-24,poi.y-92,48,34);ctx.strokeStyle=theme.edge;ctx.lineWidth=2;ctx.strokeRect(poi.x-24,poi.y-92,48,34);ctx.fillStyle='#c58a45';ctx.fillRect(poi.x-16,poi.y-92,4,34);ctx.fillRect(poi.x+12,poi.y-92,4,34);ctx.fillRect(poi.x-4,poi.y-79,8,9);
    ctx.fillStyle=theme.edge;ctx.fillText(poi.opened?'Opened':poi.completed?'Chest · walk close':'Locked',poi.x,poi.y-104);
   }
+ }else if(s.battleRoyale){
+  drawBattleArena(ctx,s,safeRadius(s),view.feedback?.reducedMotion?0:s.time);
  }else if(s.scene.id==='lobby'){
   drawLobby(ctx,world,s.time);
  }else{
@@ -114,14 +119,6 @@ export function render(ctx,s,width,height,localId,view={}){
   for(let x=0;x<=world.width;x+=60){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,world.height);ctx.stroke();}
   for(let y=0;y<=world.height;y+=60){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(world.width,y);ctx.stroke();}
   ctx.strokeStyle='#6a8290';ctx.lineWidth=8;ctx.strokeRect(4,4,world.width-8,world.height-8);
- }
- if(s.battleRoyale){
-  const b=s.battleRoyale,r=safeRadius(s);
-  ctx.fillStyle='#ef795e';ctx.fillRect(0,0,world.width,world.height);
-  ctx.strokeStyle='#ffd49a';ctx.lineWidth=3;
-  for(let i=0;i<48;i++){const a=i*Math.PI*2/48,ring=r+35+(i%3)*55;ctx.beginPath();ctx.moveTo(b.x+Math.cos(a)*ring,b.y+Math.sin(a)*ring);ctx.lineTo(b.x+Math.cos(a+.025)*(ring+18),b.y+Math.sin(a+.025)*(ring+18));ctx.stroke();}
-  if(r>0){ctx.fillStyle='#b8c88d';circle(ctx,b.x,b.y,r);ctx.fill();ctx.strokeStyle='#182c28';ctx.lineWidth=5;ctx.stroke();}
-  ctx.strokeStyle='#c58a45';ctx.lineWidth=3;circle(ctx,b.x,b.y,b.radius);ctx.stroke();ctx.strokeStyle='#496b4a';ctx.lineWidth=2;circle(ctx,b.x,b.y,14);ctx.stroke();
  }
  ctx.lineCap='butt';
 
@@ -131,7 +128,7 @@ export function render(ctx,s,width,height,localId,view={}){
   const hit=view.feedback?.actors.get('t'+t.id)?.flash??0;ctx.save();ctx.translate(t.x,t.y);ctx.scale(1+hit*.8,1-hit*.5);ctx.fillStyle=hit>0?'#ffe4a3':'#8e6372';ctx.fillRect(-22,-22,44,44);ctx.restore();ctx.strokeStyle='#e8b4c4';ctx.lineWidth=3;ctx.strokeRect(t.x-12,t.y-12,24,24);
   ctx.fillStyle='#d9e3ec';ctx.fillText(`Hits: ${t.hits} · Damage: ${Math.round(t.damage*100)/100}`,t.x,t.y+44);
  }
- for(const wall of s.walls){ctx.save();ctx.translate(wall.x+wall.width/2,wall.y+wall.height/2);ctx.rotate(wall.angle??0);ctx.fillStyle=wall.kind==='arenaCover'?'#496b4a':wall.projectileOnly?'#fff7bd80':wall.permanent?'#526475':'#8c7967';ctx.fillRect(-wall.width/2,-wall.height/2,wall.width,wall.height);ctx.strokeStyle=wall.kind==='arenaCover'?'#182c28':'#decbb1';ctx.lineWidth=3;ctx.strokeRect(-wall.width/2,-wall.height/2,wall.width,wall.height);if(!wall.permanent){ctx.fillStyle='#fff';ctx.fillText(`${Math.ceil(wall.expiresAt-s.time)}s`,0,-wall.height/2-8);}ctx.restore();}
+ for(const wall of s.walls){if(wall.kind==='arenaCover'){drawArenaCover(ctx,wall);continue;}ctx.save();ctx.translate(wall.x+wall.width/2,wall.y+wall.height/2);ctx.rotate(wall.angle??0);ctx.fillStyle=wall.kind==='arenaCover'?'#496b4a':wall.projectileOnly?'#fff7bd80':wall.permanent?'#526475':'#8c7967';ctx.fillRect(-wall.width/2,-wall.height/2,wall.width,wall.height);ctx.strokeStyle=wall.kind==='arenaCover'?'#182c28':'#decbb1';ctx.lineWidth=3;ctx.strokeRect(-wall.width/2,-wall.height/2,wall.width,wall.height);if(!wall.permanent){ctx.fillStyle='#fff';ctx.fillText(`${Math.ceil(wall.expiresAt-s.time)}s`,0,-wall.height/2-8);}ctx.restore();}
  for(const portal of s.portals){if(s.scene.id==='lobby'){drawLobbyPortal(ctx,portal,s.time);continue;}ctx.strokeStyle=portal.location==='battleRoyale'?'#ef795e':'#a592ef';ctx.lineWidth=5;circle(ctx,portal.x,portal.y,35);ctx.stroke();ctx.fillStyle='#c4b7ff';ctx.fillText(portal.label,portal.x,portal.y+56);ctx.fillText(portal.available?'Enter together':'Not available yet',portal.x,portal.y+73);}
  for(const pedestal of s.pedestals){ctx.fillStyle='#44505f';ctx.fillRect(pedestal.x-26,pedestal.y-24,52,48);ctx.strokeStyle=rarityColor({rarity:RARITIES[Math.max(RARITIES.indexOf(s.debugRarity),WAND_MIN_RARITY[pedestal.type]??0)]});ctx.lineWidth=3;ctx.strokeRect(pedestal.x-26,pedestal.y-24,52,48);wand(ctx,pedestal.x,pedestal.y,-.5,pedestal.type);ctx.fillStyle=WANDS[pedestal.type].color;ctx.fillText(WANDS[pedestal.type].name,pedestal.x,pedestal.y+43);if(WAND_MIN_RARITY[pedestal.type]){ctx.font='11px system-ui';ctx.fillText(`${RARITIES[WAND_MIN_RARITY[pedestal.type]]}+`,pedestal.x,pedestal.y+58);ctx.font='14px system-ui';}}
  if(s.scene.id==='debug'&&s.runeStation){const r=s.runeStation;ctx.fillStyle='#b69cff';ctx.fillRect(r.x-25,r.y-25,50,50);ctx.strokeStyle=rarityColor({rarity:s.debugRarity});ctx.strokeRect(r.x-25,r.y-25,50,50);ctx.fillStyle='#fff';ctx.fillText('Random rune',r.x,r.y+48);}

@@ -41,8 +41,10 @@ test('Light disc hits on outward and returning paths and expires; Light wall all
  wall.players[0].x=600;wall.players[0].angle=0;wall.players[0].wand=createWand('ice');wall.players[0].mode='Normal';wall.players[0].charge=1;wall.targets=[dummy(3,900,450)];release(wall,1);advance(wall,1);assert.equal(wall.targets[0].damage,0);advance(wall,5);assert.equal(wall.walls.length,0);
 });
 test('Crystal gently homes within a forward sector and splits once into two weaker unguided shards',()=>{
- const s=equipped('crystal');s.enemies=[enemy(3,800,490)];release(s,1);const b=s.projectiles[0],angle=b.angle;step(s,{},.1);assert.ok(b.angle>angle);assert.ok(b.angle-angle<=WANDS.crystal.balance.turnSpeed*.1+1e-8);
- advance(s,.5);const children=s.projectiles.filter(p=>p.child);assert.equal(children.length,2);assert.ok(children.every(p=>p.damage<b.damage));advance(s,4);assert.equal(s.projectiles.length,0);
+ const s=equipped('crystal');s.enemies=[enemy(3,800,490)];release(s,1);const b=s.projectiles[0],angle=b.angle;
+ // Keep the homing target in the forward sector even when cast spread changes.
+ s.enemies[0].x=b.x+180*Math.cos(angle+.2);s.enemies[0].y=b.y+180*Math.sin(angle+.2);step(s,{},.1);assert.ok(b.angle>angle);assert.ok(b.angle-angle<=WANDS.crystal.balance.turnSpeed*.1+1e-8);
+ for(let i=0;i<60&&!s.enemies[0].hits;i++)step(s,{},1/60);const children=s.projectiles.filter(p=>p.child);assert.equal(children.length,2);assert.ok(children.every(p=>p.damage<b.damage));advance(s,4);assert.equal(s.projectiles.length,0);
 });
 test('Crystal trap detonates near enemies only, emits shards and cleans up',()=>{
  const s=equipped('crystal','Special');release(s,1);const trap=s.effects[0];step(s,{},.1);assert.equal(s.effects[0].kind,'crystalTrap');s.enemies=[enemy(3,trap.x+30,trap.y)];step(s,{},.01);assert.ok(s.enemies[0].damage>0);assert.ok(!s.effects.some(e=>e.kind==='crystalTrap'));assert.equal(s.projectiles.length,WANDS.crystal.balance.shardCount);advance(s,5);assert.equal(s.projectiles.length,0);assert.equal(s.effects.length,0);

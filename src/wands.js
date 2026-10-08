@@ -26,9 +26,9 @@ export function lightningPoint(player){const b=spellBalance(player);const distan
 // Each spell's numerical parameters are coefficients of the same seven item stats.
 const parameterStat=key=>/damage/i.test(key)?'damage':/range|Range|Distance/.test(key)?'range':/Radius|radius|Depth|Length|Thickness|chargedRadiusBonus/.test(key)?'size':/^(projectileSpeed|waveSpeed)$/.test(key)?'speed':/chargeTime|ChargeTime/.test(key)?'chargeTime':key==='spread'?'spread':null;
 export const WANDS=Object.freeze(Object.fromEntries(Object.entries(DEFINITIONS).map(([type,definition])=>{
- const b=definition.balance;
- const baseStats={damage:type==='test'?0:(b.normalDamage??b.pelletDamage??b.lineDamage),range:b.projectileRange??b.lineRange,size: b.projectileRadius??b.pelletRadius??b.lineRadius,speed:b.projectileSpeed??1,chargeTime:b.chargeTime,spread:b.spread??ITEM_BALANCE.spreadStart,manaCost:type==='test'?0:ITEM_BALANCE.normalMana*(b.manaMultiplier??1)};
- const coefficients={};for(const [key,value] of Object.entries(b)){const stat=parameterStat(key);if(stat&&baseStats[stat])coefficients[key]={stat,factor:value/baseStats[stat]};}
+ const b=definition.balance,spreadMultiplier=type==='ice'?1:4;
+ const baseStats={damage:type==='test'?0:(b.normalDamage??b.pelletDamage??b.lineDamage),range:b.projectileRange??b.lineRange,size: b.projectileRadius??b.pelletRadius??b.lineRadius,speed:b.projectileSpeed??1,chargeTime:b.chargeTime,spread:(b.spread??ITEM_BALANCE.spreadStart)*spreadMultiplier,manaCost:type==='test'?0:ITEM_BALANCE.normalMana*(b.manaMultiplier??1)};
+ const coefficients={};for(const [key,value] of Object.entries(b)){const stat=parameterStat(key);if(stat&&baseStats[stat])coefficients[key]={stat,factor:value*(stat==='spread'?spreadMultiplier:1)/baseStats[stat]};}
  return [type,{...definition,baseStats,coefficients}];
 })));
 export function wandStats(p){const stats={...WANDS[p.wand.type].baseStats};for(const key of Object.keys(stats))stats[key]*=statFactor(p,key);return stats;}

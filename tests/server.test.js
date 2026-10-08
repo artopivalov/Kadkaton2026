@@ -16,7 +16,7 @@ test('launcher: panel control, matchmaking over WebSocket, static files, and shu
  let down=false;const launcher=createLauncher({controlPort:0,gamePort:0,gameRoot:root,grace:60,onShutdown:()=>{down=true;}});
  const control=await launcher.listen();
  try{
-  assert.match((await raw(control,'/')).body,/Kadkaton matchmaking server/);
+  assert.match((await raw(control,'/')).body,/Ebaboba matchmaking server/);
   // Foreign origins cannot drive the panel.
   await assert.rejects(open(`ws://localhost:${control}/control`,{origin:'http://evil.example'}));
   await assert.rejects(open(`ws://localhost:${control}/control`));

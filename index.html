@@ -1,18 +1,23 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Kadkaton — prototype</title><link rel="stylesheet" href="style.css"></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Ebaboba — prototype</title><link rel="stylesheet" href="style.css"></head>
 <body>
 <main id="menu" class="menu">
-<h1>Kadkaton</h1><p>Prototype · 2D</p>
-<canvas id="character-preview" width="160" height="110" role="img" aria-label="Character preview"></canvas>
+<div class="menu-banner" aria-hidden="true"></div><h1 class="game-title" aria-label="EBABOBA"><span aria-hidden="true" style="--letter:0">E</span><span aria-hidden="true" style="--letter:1">B</span><span aria-hidden="true" style="--letter:2">A</span><span aria-hidden="true" style="--letter:3">B</span><span aria-hidden="true" style="--letter:4">O</span><span aria-hidden="true" style="--letter:5">B</span><span aria-hidden="true" style="--letter:6">A</span></h1>
 <form id="start-form">
-<label for="name">Wizard name</label><input id="name" maxlength="24" placeholder="Wizard" autocomplete="nickname">
-<label for="color">Character color</label><input id="color" type="color" value="#79a9ff">
-<button type="submit">Play</button>
+<canvas id="character-preview" width="160" height="110" role="img" aria-label="Character preview"></canvas>
+<label for="name">Wizard name</label><input id="name" maxlength="24" placeholder="Ebaboba-XX" autocomplete="nickname">
+<fieldset class="color-picker"><legend>Character color</legend>
+<input id="color" type="hidden" value="#79a9ff">
+<canvas id="color-palette" width="300" height="96" tabindex="0" role="application" aria-label="Free color palette. Drag to choose saturation and brightness. Use arrow keys to adjust." aria-describedby="palette-help"></canvas>
+<label class="hue-label" for="color-hue">Hue<input id="color-hue" type="range" min="0" max="360" step="any" value="219" aria-label="Color hue"></label>
+<span id="palette-help" class="sr-only">Left and right change saturation. Up and down change brightness. Any color can be selected.</span>
+</fieldset>
+<div class="menu-actions"><button class="play-button" type="submit">Play</button>
 <button type="button" id="host-game">Host game</button>
-<button type="button" id="join-game">Join game</button>
+<button type="button" id="join-game">Join game</button></div>
 </form>
-<small id="menu-hint">Online play needs the matchmaking server: run "npm run server" and open the game from its address.</small>
+<details class="menu-help"><summary>Online setup</summary><small id="menu-hint">Online play needs the matchmaking server: run "npm run server" and open the game from its address.</small></details>
 <p id="menu-message" role="alert"></p>
 <section id="net-panel" hidden aria-labelledby="net-title">
 <h2 id="net-title"></h2>
@@ -31,6 +36,7 @@
 <header class="hud"><button id="exit">Menu</button></header>
 
 <div id="status-hud">
+<p id="mode-help"></p><div id="rune-info" hidden></div>
 <div id="debug-tools" hidden><label>Item rarity <select id="rarity"></select></label><label>Rune effect<select id="rune-effect"><option value="random">Random</option></select></label><label>Enemy<select id="enemy-type"></select></label><button id="spawn-enemy">Spawn enemy</button><button id="clear-enemies">Clear enemies</button></div>
 </div>
 <label id="zoom-control">Zoom<input id="zoom" type="range" min="0.35" max="1.25" step="any" value="0.72" aria-label="Camera zoom" aria-orientation="vertical"></label>

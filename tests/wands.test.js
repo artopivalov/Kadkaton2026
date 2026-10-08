@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {setMode,step,release,dropWand,CONFIG} from '../src/simulation.js';
 import {ITEM_BALANCE,COMBAT_BALANCE,ICE_BALANCE,LIGHTNING_BALANCE} from '../src/balance.js';
-import {lightningPoint} from '../src/wands.js';
+import {lightningPoint,wandStats} from '../src/wands.js';
 const profile={name:'Test',color:'#79a9ff'};
 function equipped(type,mode='Normal'){const s=createState(profile);s.players[0].wand={id:9,type};s.players[0].angle=0;setMode(s,1,mode);return s;}
 function target(id,x,y){return {id,x,y,hits:0,damage:0};}
@@ -53,7 +53,10 @@ test('Lightning Special marker distance grows; release at partial charge strikes
  const far=lightningPoint(s.players[0]);assert.ok(far.x>near.x);assert.equal(s.effects.length,0);
  s.targets=[target(4,far.x,far.y),target(5,far.x+200,far.y)];
  s.walls=[{x:700,y:400,width:20,height:100}]; // Sky strikes do not trace intervening geometry.
- release(s,1);assert.equal(s.effects[0].kind,'skyStrike');assert.ok(Math.hypot(s.effects[0].x-far.x,s.effects[0].y-far.y)<20);
+ const p=s.players[0],distance=Math.hypot(far.x-p.x,far.y-p.y),maxAngle=wandStats(p).spread*(ITEM_BALANCE.spreadMin/ITEM_BALANCE.spreadStart+(1-ITEM_BALANCE.spreadMin/ITEM_BALANCE.spreadStart)*(1-p.charge));
+ release(s,1);assert.equal(s.effects[0].kind,'skyStrike');const strike=s.effects[0];
+ assert.ok(Math.abs(Math.hypot(strike.x-p.x,strike.y-p.y)-distance)<1e-8);
+ assert.ok(Math.hypot(strike.x-far.x,strike.y-far.y)<=2*distance*Math.sin(maxAngle/2)+1e-8);
  assert.deepEqual(s.targets.map(t=>t.damage),[LIGHTNING_BALANCE.strikeDamage,0]);
  assert.equal(s.players[0].charge,0);assert.equal(s.projectiles.length,0);
 });

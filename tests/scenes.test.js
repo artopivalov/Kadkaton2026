@@ -21,7 +21,7 @@ test('debug scene has every wand on permanent pedestals, no loose starting items
 test('game lobby has a harmless starter and portals without playground entities',()=>{
  const s=lobbyScene(profile);assert.equal(s.players[0].wand.type,'test');assert.equal(s.scene.id,'lobby');
  assert.equal(s.pedestals.length,0);assert.equal(s.targets.length,0);assert.equal(s.items.length,0);assert.equal(s.portals.length,4);
- assert.ok(s.portals.every(p=>p.available));s.players[0].x=s.portals[0].x;s.players[0].y=s.portals[0].y;
+ assert.ok(s.portals.filter(p=>p.location!=='battleRoyale').every(p=>p.available));assert.equal(s.portals.find(p=>p.location==='battleRoyale').available,false);s.players[0].x=s.portals[0].x;s.players[0].y=s.portals[0].y;
  step(s,{1:{x:0,y:0}},.01);assert.equal(s.players[0].nearPortal,s.portals[0].id);
 });
 test('Test Wand has zero damage in both modes, with small Normal push only',()=>{
@@ -67,4 +67,17 @@ test('Earth wall refuses overlapping actors and existing geometry',()=>{
 test('boulder launched at the world edge remains inside and ricochets',()=>{
  const s=equipped('earth');s.players[0].x=1180;s.players[0].charge=1;release(s,1);const b=s.projectiles[0];
  assert.ok(b.x<=1200-b.radius);step(s,{1:{x:0,y:0}},.1);assert.ok(b.ricochets>0);assert.ok(b.x<=1200-b.radius);
+});
+
+test('lobby arrivals and returning groups spawn at the carpet with rows extending upward',async()=>{
+ const {addPlayer}=await import('../src/simulation.js');
+ const {configureLobby}=await import('../src/scenes/lobby.js');
+ const s=lobbyScene(profile);
+ for(let i=1;i<8;i++)addPlayer(s,{...profile,name:`Wizard ${i}`});
+ assert.deepEqual(s.spawn,{x:600,y:1000});
+ const positions=s.players.map(p=>[p.x,p.y]);
+ assert.equal(new Set(positions.map(p=>p.join(','))).size,8);
+ assert.ok(s.players.every(p=>p.y<=1000&&p.y>=860&&p.y+20<s.world.height));
+ for(const p of s.players){p.x=50;p.y=50;}
+ configureLobby(s);assert.deepEqual(s.players.map(p=>[p.x,p.y]),positions);
 });

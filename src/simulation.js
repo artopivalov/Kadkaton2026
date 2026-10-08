@@ -26,7 +26,8 @@ export function createState(profile=null,options={}){
 }
 export const getPlayer=(s,id)=>s.players.find(p=>p.id===id);
 export function addPlayer(s,profile){
- const [dx,dy]=SPAWN_SLOTS[s.players.length%SPAWN_SLOTS.length],spacing=SCENE_BALANCE.spawnSpacing;
+ const index=s.players.length,spacing=SCENE_BALANCE.spawnSpacing;
+ const [dx,dy]=s.scene.id==='lobby'?[[0,1,-1][index%3],-Math.floor(index/3)]:SPAWN_SLOTS[index%SPAWN_SLOTS.length];
  const p={
   id:s.nextPlayerId++,x:s.spawn.x+dx*spacing,y:s.spawn.y+dy*spacing,angle:-Math.PI/2,name:profile.name,color:profile.color,
   wand:{id:s.nextId++,type:'test'},mode:'Safe',charge:0,hits:0,damage:0,health:PLAYER_BALANCE.health,mana:PLAYER_BALANCE.mana,rune:null,activePedestal:null,nearPortal:null
@@ -240,7 +241,9 @@ function castSingle(s,id){
 }
 function segmentDistance(x,y,ax,ay,bx,by){const dx=bx-ax,dy=by-ay;const t=Math.max(0,Math.min(1,((x-ax)*dx+(y-ay)*dy)/(dx*dx+dy*dy||1)));return Math.hypot(x-ax-t*dx,y-ay-t*dy);}
 // inputs maps a player id to {x,y,held,commands}; a missing entry means an idle player.
+const TURN_FULL_AT=.75,TURN_RATE=14;
 export function step(s,inputs,dt){
+ if(s.scene.id==='lobby')for(const portal of s.portals)if(portal.location==='battleRoyale')portal.available=s.players.length>1;
  if(s.battleRoyale?.result)return;
  s.time+=dt;s.hitFeedback=(s.hitFeedback??[]).filter(e=>s.time-e.time<.35);s.walls=s.walls.filter(w=>w.permanent||w.expiresAt>s.time);
  for(const p of s.players)stepPlayer(s,p,inputs[p.id]??IDLE,dt);
@@ -264,7 +267,10 @@ function stepPlayer(s,p,input,dt){
  let {x=0,y=0}=input;const length=Math.hypot(x,y);
  if(length>1){x/=length;y/=length;}
  if(length>CONFIG.inputDeadzone){
-  p.angle=Math.atan2(y,x);
+  // Near the stick centre the direction is noisy: limit the turn rate there, snapping only at a firm deflection.
+  const target=Math.atan2(y,x),strength=Math.min(1,length/TURN_FULL_AT);
+  if(strength>=1||p.angle===undefined)p.angle=target;
+  else{const diff=Math.atan2(Math.sin(target-p.angle),Math.cos(target-p.angle)),step=TURN_RATE*strength*strength*dt;p.angle+=Math.max(-step,Math.min(step,diff));}
   moveActor(s,p,x*CONFIG.speed*dt,y*CONFIG.speed*dt,CONFIG.playerRadius);
  }
  if(input.held&&p.wand&&p.mode!=='Safe'){
