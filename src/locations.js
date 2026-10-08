@@ -1,13 +1,15 @@
+import {clearBattleRoyale} from './battle-royale.js';
+import {installPuzzles} from './puzzles.js';
 import {spawnEnemy,rollEnemy,spawnRare,tickEnemyAction,resolveEnemyWarning,constrainRare} from './enemies.js';
 import {createWand,combatWands,rollRarity,rollWand} from './items.js';
 import {generateLocation,routeTo} from './generator.js';
 import {LOCATION_BALANCE,ENEMY_BALANCE,ENCOUNTER_BALANCE,PLAYER_BALANCE,ENEMY_SPAWN_BALANCE} from './balance.js';
 import {createRandom} from './rng.js';
 export function enterLocation(s,location,seed=s.seed+1,{viewer=false}={}){
- const map=generateLocation(location,seed,Math.max(1,s.players.length));s.seed=seed>>>0;s.rngState=s.seed;s.map=map;s.world=map.world;s.spawn=map.spawn;
- s.scene={id:location,title:`${LOCATION_BALANCE[location].name}${viewer?' · Generation viewer':''}`,description:viewer?'Free camera · choose a seed and regenerate':'Clear arenas, solve plates in order, and open shared chests.',viewer};
- s.walls=[];s.targets=[];s.pedestals=[];s.portals=[];s.items=[];s.effects=[];s.projectiles=[];s.enemies=[];s.telegraphs=[];s.completed=false;
- for(const [i,p] of s.players.entries()){p.x=map.spawn.x+[0,1,-1][i%3]*45;p.y=map.spawn.y+Math.floor(i/3)*40;p.health=PLAYER_BALANCE.health;p.mana=PLAYER_BALANCE.mana;p.charge=0;p.nearPortal=null;p.activePedestal=null;p.activeRuneStation=null;p.wand={id:s.nextId++,...rollWand(createRandom(seed+i+77),rollRarity(createRandom(seed+i+99),location,0))};}
+ clearBattleRoyale(s);const map=generateLocation(location,seed,Math.max(1,s.players.length));s.seed=seed>>>0;s.rngState=s.seed;s.map=map;s.world=map.world;s.spawn=map.spawn;
+ s.scene={id:location,title:`${LOCATION_BALANCE[location].name}${viewer?' · Generation viewer':''}`,description:viewer?'Free camera · choose a seed and regenerate':'Clear arenas, solve puzzle rooms, and open shared chests.',viewer};
+ s.walls=[];s.targets=[];s.pedestals=[];s.portals=[];s.items=[];s.effects=[];s.hitFeedback=[];s.projectiles=[];s.enemies=[];s.telegraphs=[];s.completed=false;
+ for(const [i,p] of s.players.entries()){p.x=map.spawn.x+[0,1,-1][i%3]*45;p.y=map.spawn.y+Math.floor(i/3)*40;p.health=PLAYER_BALANCE.health;p.mana=PLAYER_BALANCE.mana;p.charge=0;delete p.knockback;p.nearPortal=null;p.activePedestal=null;p.activeRuneStation=null;p.wand={id:s.nextId++,...rollWand(createRandom(seed+i+77),rollRarity(createRandom(seed+i+99),location,0))};}
  const random=createRandom(seed^0xabc123),config=LOCATION_BALANCE[location];
  const spawn=(type,x,y,poi,progress)=>spawnEnemy(s,type,x,y,poi,progress);
  for(const poi of map.pois){
@@ -18,6 +20,7 @@ export function enterLocation(s,location,seed=s.seed+1,{viewer=false}={}){
  for(const corridor of map.corridors){const point=corridor.points[1],progress=map.pois[corridor.to].progress;for(let i=0;i<ENCOUNTER_BALANCE.corridorBase+Math.floor(progress*2);i++)spawn(rollEnemy(random,location,progress,i%2?config.ranged:config.melee),point.x+(i-1)*ENEMY_SPAWN_BALANCE.corridorSpacing,point.y,null,progress);}
  // First combat wand is reachable with the harmless lobby wand, before any fight is required.
  s.items.push({id:s.nextId++,...createWand('fire','Common',random),x:map.spawn.x,y:map.spawn.y-45,availableAt:s.time});
+ installPuzzles(s);
  return s;
 }
 export function tickEncounters(s,dt,{move,damage,trace}){
@@ -49,7 +52,7 @@ export function tickEncounters(s,dt,{move,damage,trace}){
  for(const poi of s.map.pois){
   if(!poi.completed){
    if(poi.type==='combat')poi.completed=!s.enemies.some(e=>e.poi===poi.id);
-   else {const next=poi.plates.find(p=>!p.active);if(next&&living.some(p=>Math.hypot(p.x-next.x,p.y-next.y)<b.puzzlePlateRadius))next.active=true;poi.completed=poi.plates.every(p=>p.active)&&!s.enemies.some(e=>e.poi===poi.id);}
+   // Puzzle progress is resolved by tickPuzzles after spell movement.
   }
   if(poi.completed&&!poi.opened&&living.some(p=>Math.hypot(p.x-poi.x,p.y-(poi.y-75))<b.chestRadius)){
    poi.opened=true;poi.loot.forEach((item,i)=>s.items.push({...item,id:s.nextId++,x:poi.x+(i?45:-45),y:poi.y-75,availableAt:s.time}));

@@ -20,7 +20,7 @@ test('debug scene has every wand on permanent pedestals, no loose starting items
 });
 test('game lobby has a harmless starter and portals without playground entities',()=>{
  const s=lobbyScene(profile);assert.equal(s.players[0].wand.type,'test');assert.equal(s.scene.id,'lobby');
- assert.equal(s.pedestals.length,0);assert.equal(s.targets.length,0);assert.equal(s.items.length,0);assert.equal(s.portals.length,3);
+ assert.equal(s.pedestals.length,0);assert.equal(s.targets.length,0);assert.equal(s.items.length,0);assert.equal(s.portals.length,4);
  assert.ok(s.portals.every(p=>p.available));s.players[0].x=s.portals[0].x;s.players[0].y=s.portals[0].y;
  step(s,{1:{x:0,y:0}},.01);assert.equal(s.players[0].nearPortal,s.portals[0].id);
 });
@@ -38,7 +38,7 @@ test('Air Normal damages on impact and pushes nearby targets apart',()=>{
 });
 test('Air Special damages and strongly pushes every nearby target',()=>{
  const s=equipped('air','Special');s.targets=[target(4,660,450),target(5,540,450),target(6,900,450)];
- s.players[0].charge=1;release(s,1);assert.ok(s.targets[0].x>660);assert.ok(s.targets[1].x<540);assert.equal(s.targets[2].x,900);
+ s.players[0].charge=1;release(s,1);step(s,{},.3);assert.ok(s.targets[0].x>660);assert.ok(s.targets[1].x<540);assert.equal(s.targets[2].x,900);
  assert.ok(s.targets[0].damage>0&&s.targets[1].damage>0);assert.equal(s.targets[2].damage,0);assert.equal(s.effects[0].kind,'airSphere');
 });
 test('Earth boulder ricochets off an internal wall and a world boundary without tunneling',()=>{

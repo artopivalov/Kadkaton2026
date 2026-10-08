@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createPuzzle} from '../src/puzzles.js';
 import {generateLocation,onFloor,routeTo} from '../src/generator.js';
 import {enterLocation} from '../src/locations.js';
 import {createState,step,release,addPlayer,readyPortal} from '../src/simulation.js';
@@ -17,7 +18,7 @@ test('seeded maps have exact POI counts, connected alternating corridors and dis
  }
 });
 test('POI and item type rolls are independent and roughly half across seeds',()=>{
- let combat=0,total=0,wands=0;for(let seed=0;seed<200;seed++)for(const p of generateLocation('library',seed).pois){combat+=p.type==='combat';total++;wands+=p.loot.filter(i=>i.kind==='wand').length;}
+ let combat=0,total=0,wands=0;for(let seed=0;seed<200;seed++)for(const p of generateLocation('library',seed).pois.filter(p=>!p.boss)){combat+=p.type==='combat';total++;wands+=p.loot.filter(i=>i.kind==='wand').length;}
  assert.ok(combat/total>.46&&combat/total<.54);assert.ok(wands/(total*2)>.46&&wands/(total*2)<.54);
 });
 test('viewer uses identical complete map and enemy spawn; group difficulty scales without multiplying loot',()=>{
@@ -29,8 +30,8 @@ test('map collision prevents leaving floor while state remains deterministic aft
  const s=level(),copy=JSON.parse(JSON.stringify(s));for(let i=0;i<120;i++){const input={1:{x:1,y:0}};step(s,input,1/60);step(copy,input,1/60);}assert.deepEqual(s,copy);assert.ok(onFloor(s.map,s.players[0].x,s.players[0].y,20));
 });
 test('puzzles work solo in order and each completed chest creates exactly two shared items once',()=>{
- const s=level(),poi=s.map.pois.find(p=>p.type==='puzzle'&&!p.boss),p=s.players[0];s.enemies=[];
- p.x=poi.plates[2].x;p.y=poi.y;step(s,{},.01);assert.equal(poi.plates[2].active,false);
+ const s=level(),poi=s.map.pois.find(p=>p.type==='puzzle'&&!p.boss),p=s.players[0];s.enemies=[];createPuzzle(poi,s.map.location,()=>.4,1,'plates');
+ p.x=poi.plates[2].x;p.y=poi.plates[2].y;step(s,{},.01);assert.equal(poi.plates[2].active,false);
  for(const plate of poi.plates){p.x=plate.x;p.y=plate.y;step(s,{},.01);}assert.equal(poi.completed,true);
  const before=s.items.length;p.x=poi.x;p.y=poi.y-75;step(s,{},.01);assert.equal(s.items.length,before+2);step(s,{},.01);assert.equal(s.items.length,before+2);assert.equal(poi.opened,true);
 });

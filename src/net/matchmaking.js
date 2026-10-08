@@ -1,7 +1,10 @@
 // Talks to the matchmaking server over WebSocket: room list, hosting, joining, and signaling relay.
+import {SERVER_URL} from './config.js';
 export const UNAVAILABLE='The matchmaking server is not available.';
 export class ServerError extends Error{constructor(message,code){super(message);this.code=code;}}
-export function serverUrl(location=globalThis.location){
+// A server address baked into the build wins; otherwise the server that served this page is used.
+export function serverUrl(location=globalThis.location,configured=SERVER_URL){
+ if(configured)return configured;
  if(!location||!location.host||!/^https?:$/.test(location.protocol))return null;
  return `${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`;
 }

@@ -53,7 +53,7 @@ export function createClient(link,profile,{now=()=>performance.now(),onNotice=()
   const span=b.time-a.time,alpha=span>0?Math.max(0,Math.min(1,(t-a.time)/span)):1,time=Math.min(b.time,Math.max(a.time,t)),ahead=b.time-time;
   const rs={...auth,time};
   const me=pred?getPlayer(pred,localId):null;
-  rs.players=lerpList(a.snap.players,b.snap.players,alpha).map(p=>p.id===localId&&me?{...p,x:me.x+corr.x,y:me.y+corr.y,angle:me.angle,mode:me.mode,charge:me.charge,mana:me.mana}:p);
+  rs.players=lerpList(a.snap.players,b.snap.players,alpha).map(p=>p.id===localId&&me?{...p,x:me.x+corr.x,y:me.y+corr.y,angle:me.angle,mode:me.mode,charge:me.charge,mana:me.mana,castFeedback:me.castFeedback}:p);
   rs.enemies=lerpList(a.snap.enemies,b.snap.enemies,alpha);
   rs.projectiles=lerpList(a.snap.projectiles,b.snap.projectiles,alpha).filter(e=>e.owner!==localId||e.enemy);
   rs.targets=b.snap.targets;rs.portals=b.snap.portals;rs.pedestals=b.snap.pedestals;

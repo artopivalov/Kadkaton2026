@@ -110,3 +110,11 @@ export const NET_BALANCE=Object.freeze({
  correctionRate:12,maxCorrection:160,maxPlayers:8,chunkSize:14000,
  stunServers:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']
 });
+
+// Provisional puzzle tuning: all room objects fit inside the circular arena.
+export const PUZZLE_BALANCE={plateMin:5,plateMax:7,plateRing:310,plateRadius:32,objectRadius:18,dockRadius:42,followSpeed:85,followDistance:65,plantSpeed:65,plantOrbitX:105,plantOrbitY:190,scaleWeights:[1,2,3,4],scalePanRadius:95,rootHold:.6,bodyPush:110,shotPush:65,clockSolo:4,clockCoop:6,clockBeat:1.1,clockGap:.35,beamInterval:.65,beamSpeed:320,beamRadius:7,beamRange:1050,resetRadius:42,wandOffset:46};
+export const PUZZLE_POOLS={forest:['wisps','roots','clock','scales','plates'],cave:['billiards','constellation','clock','scales','plates'],library:['lightCorridor','returnKey','crystalFork','books','clock','scales','plates']};
+
+export const BATTLE_ROYALE_BALANCE=Object.freeze({radius:900,lavaMargin:240,fillSeconds:60,lavaDamage:.1,healthMultiplier:10,forceMultiplier:3,soloBots:2,soloTesting:true,spawnRadius:.78,coverRings:[.42,.66],coversPerSector:3,coverLength:100,coverThickness:24});
+
+export const KNOCKBACK_BALANCE=Object.freeze({duration:.24,decay:14});

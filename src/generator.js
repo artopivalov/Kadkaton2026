@@ -1,3 +1,4 @@
+import {createPuzzle} from './puzzles.js';
 import {createRandom} from './rng.js';
 import {createWand,createRune,rollRarity,combatWands,rollWand} from './items.js';
 import {LOCATION_BALANCE,MAP_BALANCE} from './balance.js';
@@ -32,11 +33,11 @@ export function generateLocation(location,seed,partySize=1){
  for(const poi of pois){poi.x+=margin-minX;poi.y+=margin-minY;}
  for(const c of corridors){const a=pois[c.from],b=pois[c.to];c.points=[{x:a.x,y:a.y},{x:(a.x+b.x)/2,y:(a.y+b.y)/2},{x:b.x,y:b.y}];}
  const mapWidth=Math.max(...pois.map(p=>p.x))+margin,mapHeight=Math.max(...pois.map(p=>p.y))+MAP_BALANCE.entranceLength+MAP_BALANCE.entranceRadius+MAP_BALANCE.margin;
- const end=pois[mainCount-1];end.boss=true;
+ const end=pois[mainCount-1];end.boss=true;end.type='combat';
  const map={location,seed:seed>>>0,partySize,world:{width:mapWidth,height:mapHeight},pois,corridors,spawn:{x:pois[0].x,y:pois[0].y+MAP_BALANCE.entranceLength},bossPoi:end.id};
  map.entrance={width:MAP_BALANCE.corridorRadius,radius:MAP_BALANCE.entranceRadius,points:[{...map.spawn},{x:pois[0].x,y:pois[0].y}]};
  // Loot rolls belong to the seed, never to the camera or the player opening a chest.
- for(const poi of pois){poi.loot=Array.from({length:2},()=>{const isWand=random()<.5,rarity=rollRarity(random,location,poi.progress);return isWand?rollWand(random,rarity):createRune(random,rarity);});if(poi.type==='puzzle')poi.plates=[-1,0,1].map((n,i)=>({x:poi.x+n*100,y:poi.y,order:i,active:false}));}
+ for(const poi of pois){poi.loot=Array.from({length:2},()=>{const isWand=random()<.5,rarity=rollRarity(random,location,poi.progress);return isWand?rollWand(random,rarity):createRune(random,rarity);});if(poi.type==='puzzle')createPuzzle(poi,location,random,partySize);}
  return map;
 }
 function segmentDistance(x,y,a,b){const dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((x-a.x)*dx+(y-a.y)*dy)/(dx*dx+dy*dy||1)));return Math.hypot(x-a.x-t*dx,y-a.y-t*dy);}

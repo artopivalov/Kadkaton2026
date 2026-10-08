@@ -9,6 +9,7 @@ export function createHost(state,{maxPlayers=NET_BALANCE.maxPlayers,onJoin=()=>{
  function receive(peer,message){
   if(!message||typeof message!=='object')return;
   if(message.t==='hello'&&peer.playerId===null){
+   if(state.battleRoyale){peer.link.send({t:'bye',reason:'The match has already started.'},true);peer.link.close();return;}
    if(state.players.length>=maxPlayers){peer.link.send({t:'bye',reason:'The room is full.'},true);peer.link.close();return;}
    const name=String(message.name??'Wizard').slice(0,24)||'Wizard',color=/^#[0-9a-f]{6}$/i.test(message.color)?message.color:'#79a9ff';
    const player=addPlayer(state,{name,color});peer.playerId=player.id;peer.name=name;

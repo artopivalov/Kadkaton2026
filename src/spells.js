@@ -20,7 +20,7 @@ export function castExtended(s,p,ctx){
     let from={x:p.x,y:p.y},target=first;const visited=new Set();
     for(let i=0;target&&i<b.chainCount;i++){
      visited.add(target);ctx.hit(s,target,power(b.normalDamage)*b.chainFalloff**i,profile,from);ctx.effect(s,{kind:'stormLine',x:from.x,y:from.y,x2:target.x,y2:target.y},COMBAT_BALANCE.rayDuration);
-     from={x:target.x,y:target.y};target=[...s.targets,...(s.enemies??[])].filter(t=>(t.health??1)>0&&!visited.has(t)&&Math.hypot(t.x-from.x,t.y-from.y)<=b.chainRange).sort((a,c)=>Math.hypot(a.x-from.x,a.y-from.y)-Math.hypot(c.x-from.x,c.y-from.y))[0];
+     from={x:target.x,y:target.y};target=ctx.fieldVictims(s,p.id).filter(t=>(t.health??1)>0&&!visited.has(t)&&Math.hypot(t.x-from.x,t.y-from.y)<=b.chainRange).sort((a,c)=>Math.hypot(a.x-from.x,a.y-from.y)-Math.hypot(c.x-from.x,c.y-from.y))[0];
     }
    }
   }else field('stormCloud',b.cloudDistance,b.cloudRadius,b.cloudDuration,{damage:b.cloudDamage,tick:0,tickInterval:b.tickInterval});
@@ -51,9 +51,9 @@ export function tickExtended(s,dt,ctx){
    e.angle+=e.angularSpeed*dt;e.x=owner.x+Math.cos(e.angle)*e.orbitRadius;e.y=owner.y+Math.sin(e.angle)*e.orbitRadius;
    for(const t of ctx.victims(s,e.owner)){const key=ctx.hitKey(s,t);if(Math.hypot(t.x-e.x,t.y-e.y)<=e.radius+ctx.radiusOf(s,t)&&(e.contacts[key]??0)<=s.time){ctx.hit(s,t,e.damage,e,e);e.contacts[key]=s.time+e.contactInterval;}}
   }else if(e.kind==='stormCloud'){
-   e.tick-=Math.min(dt,e.life);while(e.tick<=0){for(const t of (e.healing?ctx.victims(s,e.owner):[...s.targets,...(s.enemies??[])]).filter(t=>(t.health??1)>0&&Math.hypot(t.x-e.x,t.y-e.y)<=e.radius+ctx.radiusOf(s,t))){ctx.hit(s,t,e.damage,e,e);ctx.effect(s,{kind:'stormLine',x:e.x,y:e.y-50,x2:t.x,y2:t.y},COMBAT_BALANCE.rayDuration);}e.tick+=e.tickInterval;}
+   e.tick-=Math.min(dt,e.life);while(e.tick<=0){for(const t of (e.healing?ctx.victims(s,e.owner):ctx.fieldVictims(s,e.owner)).filter(t=>(t.health??1)>0&&Math.hypot(t.x-e.x,t.y-e.y)<=e.radius+ctx.radiusOf(s,t))){ctx.hit(s,t,e.damage,e,e);ctx.effect(s,{kind:'stormLine',x:e.x,y:e.y-50,x2:t.x,y2:t.y},COMBAT_BALANCE.rayDuration);}e.tick+=e.tickInterval;}
   }else if(e.kind==='voidRift'){
-   for(const t of (e.healing?ctx.victims(s,e.owner):[...s.targets,...(s.enemies??[])]).filter(t=>(t.health??1)>0&&Math.hypot(t.x-e.x,t.y-e.y)<=e.radius+ctx.radiusOf(s,t)))ctx.pull(s,t,e.x,e.y,e.pullSpeed*Math.min(dt,e.life));
+   for(const t of (e.healing?ctx.victims(s,e.owner):ctx.fieldVictims(s,e.owner)).filter(t=>(t.health??1)>0&&Math.hypot(t.x-e.x,t.y-e.y)<=e.radius+ctx.radiusOf(s,t)))ctx.pull(s,t,e.x,e.y,e.pullSpeed*Math.min(dt,e.life));
    if(e.life<=dt){for(const t of ctx.victims(s,e.owner))if(Math.hypot(t.x-e.x,t.y-e.y)<=e.radius+ctx.radiusOf(s,t))ctx.hit(s,t,e.damage,e,e);ctx.effect(s,{kind:'voidImpact',x:e.x,y:e.y,radius:e.radius},CONFIG.impactDuration);e.life=0;}
   }else if(e.kind==='meteorWarning'&&e.life<=dt){
    for(const t of ctx.victims(s,e.owner))if(Math.hypot(t.x-e.x,t.y-e.y)<=e.radius+ctx.radiusOf(s,t))ctx.hit(s,t,e.damage,e,e);
@@ -69,7 +69,7 @@ export function interceptProjectile(s,b,ax,ay,ctx){
   const dx=b.x-ax,dy=b.y-ay,normal={x:Math.cos(mirror.angle),y:Math.sin(mirror.angle)},denominator=dx*normal.x+dy*normal.y;if(Math.abs(denominator)<1e-8)continue;
   const t=((mirror.x-ax)*normal.x+(mirror.y-ay)*normal.y)/denominator;if(t<0||t>1)continue;
   const x=ax+dx*t,y=ay+dy*t,side=-(x-mirror.x)*normal.y+(y-mirror.y)*normal.x;if(Math.abs(side)>mirror.radius+b.radius)continue;
-  const vx=Math.cos(b.angle),vy=Math.sin(b.angle),dot=vx*normal.x+vy*normal.y;b.angle=Math.atan2(vy-2*dot*normal.y,vx-2*dot*normal.x);b.x=x+Math.cos(b.angle)*(b.radius+1);b.y=y+Math.sin(b.angle)*(b.radius+1);b.enemy=false;b.owner=mirror.owner;b.healing=mirror.healing;b.push=mirror.push;b.distance=0;mirror.reflections--;if(!mirror.reflections)mirror.life=0;return true;
+  const vx=Math.cos(b.angle),vy=Math.sin(b.angle),dot=vx*normal.x+vy*normal.y;b.angle=Math.atan2(vy-2*dot*normal.y,vx-2*dot*normal.x);b.x=x+Math.cos(b.angle)*(b.radius+1);b.y=y+Math.sin(b.angle)*(b.radius+1);b.enemy=false;b.owner=mirror.owner;b.healing=mirror.healing;b.push=mirror.push;if(mirror.puzzlePoi!==undefined)b.puzzlePoi=mirror.puzzlePoi;b.distance=0;mirror.reflections--;if(!mirror.reflections)mirror.life=0;return true;
  }
 }
 export function splitCastThroughPrism(s,p,ctx){

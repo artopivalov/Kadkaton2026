@@ -54,7 +54,7 @@ test('Orbit enforces a three-satellite cap, contact damage and expiration; Speci
 });
 test('Comet accelerates and hits harder at distance; Special waits and emits damaging debris',()=>{
  const amounts=[];for(const x of [720,1200]){const s=equipped('comet');s.targets=[dummy(3,x,450)];release(s,1);const initial=s.projectiles[0].speed;step(s,{},.1);assert.ok(s.projectiles[0].speed>initial);advance(s,4);amounts.push(s.targets[0].damage);}assert.ok(amounts[1]>amounts[0]);
- const s=equipped('comet','Special');release(s,1);const e=s.effects.find(e=>e.kind==='meteorWarning');s.targets=[dummy(3,e.x,e.y)];advance(s,1);assert.equal(s.targets[0].damage,0);advance(s,2);assert.ok(s.targets[0].damage>0);assert.ok(s.projectiles.some(p=>p.kind==='meteorDebris'));
+ const s=equipped('comet','Special');release(s,1);const e=s.effects.find(e=>e.kind==='meteorWarning');s.targets=[dummy(3,e.x,e.y)];advance(s,1);assert.equal(s.targets[0].damage,0);while(!s.effects.some(effect=>effect.kind==='cometImpact'))step(s,{},1/60);assert.ok(s.targets[0].damage>0);assert.ok(s.projectiles.some(p=>p.kind==='meteorDebris'));
 });
 test('Prism ray loses damage through targets; the placed prism splits a Normal cast into exactly three rays',()=>{
  const s=equipped('prism');s.targets=[dummy(3,740,450),dummy(4,900,450)];release(s,1);assert.ok(s.targets[0].damage>s.targets[1].damage);
@@ -68,7 +68,7 @@ test('Healing restores health instead of damage for direct, ray, area, satellite
  for(const [type,mode] of [['blood','Normal'],['prism','Normal'],['fire','Special'],['nature','Special'],['comet','Special'],['orbit','Normal']]){const s=equipped(type,mode,['healing']);const other=addPlayer(s,profile);other.x=type==='comet'?900:type==='nature'?750:type==='orbit'?665:700;other.y=450;other.health=40;release(s,1);advance(s,4);assert.ok(other.health>40,`${type} must heal`);assert.ok(other.health<=PLAYER_BALANCE.health);}
 });
 test('Super knockback scales push and attraction fivefold and instability rolls once for a doubled cast',()=>{
- const pushes=[];for(const special of [[],['force']]){const s=equipped('fire','Special',special);s.targets=[dummy(3,650,450)];release(s,1);pushes.push(s.targets[0].x-650);}assert.ok(Math.abs(pushes[1]/pushes[0]-5)<1e-8);
+ const pushes=[];for(const special of [[],['force']]){const s=equipped('fire','Special',special);s.targets=[dummy(3,650,450)];release(s,1);step(s,{},.3);pushes.push(s.targets[0].x-650);}assert.ok(Math.abs(pushes[1]/pushes[0]-5)<1e-8);
  const normal=spellBalance(equipped('gravity','Special').players[0]),boost=spellBalance(equipped('gravity','Special',['force']).players[0]);assert.equal(boost.pullSpeed,normal.pullSpeed*5);
  const s=equipped('fire','Normal',['double','unstable']);release(s,1);assert.equal(s.projectiles[0].damage,s.projectiles[1].damage);assert.equal(s.players[0].castMultiplier,undefined);
 });

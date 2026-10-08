@@ -47,7 +47,7 @@ small{color:var(--muted)}
 <div class="row">
 <button id="start" class="primary" disabled>Start</button>
 <button id="stop" disabled>Stop</button>
-<label><input id="tunnel" type="checkbox" checked> Public tunnel (Cloudflare)</label>
+<label><input id="tunnel" type="checkbox" checked> <span id="tunnelLabel">Public tunnel</span></label>
 </div>
 <div class="urls" id="urls"></div>
 <p><small>Closing this tab stops the server. Players on other networks need the public link; the tunnel address changes every start.</small></p>
@@ -92,6 +92,8 @@ function renderState(state){
  if(state.localUrl)box.append(urlRow('Local',state.localUrl));
  for(const url of state.lanUrls)box.append(urlRow('Network',url));
  if(state.running&&state.tunnelWanted)box.append(state.publicUrl?urlRow('Public',state.publicUrl):Object.assign(document.createElement('small'),{textContent:'Public tunnel is starting...'}));
+ $('tunnelLabel').textContent=`Public tunnel (${({tailscale:'Tailscale Funnel',ngrok:'ngrok'})[state.tunnelProvider]??'Cloudflare, temporary address'})`;
+ if(state.bakedUrl)box.append(urlRow('Builds',state.bakedUrl));
  $('clients').textContent=state.clients;renderRooms(state.rooms);
 }
 function age(ms){const s=Math.max(0,Math.floor(ms/1000));return s<60?`${s}s`:s<3600?`${Math.floor(s/60)}m ${s%60}s`:`${Math.floor(s/3600)}h ${Math.floor(s%3600/60)}m`;}
