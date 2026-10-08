@@ -2,7 +2,7 @@ import {createTrainingState as createState} from './fixtures.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {setMode,step,release,dropWand,CONFIG} from '../src/simulation.js';
-import {ICE_BALANCE,LIGHTNING_BALANCE} from '../src/balance.js';
+import {ITEM_BALANCE,COMBAT_BALANCE,ICE_BALANCE,LIGHTNING_BALANCE} from '../src/balance.js';
 import {lightningPoint} from '../src/wands.js';
 const profile={name:'Test',color:'#79a9ff'};
 function equipped(type,mode='Normal'){const s=createState(profile);s.players[0].wand={id:9,type};s.players[0].angle=0;setMode(s,1,mode);return s;}
@@ -10,7 +10,7 @@ function target(id,x,y){return {id,x,y,hits:0,damage:0};}
 test('rapid taps produce tiny short sparks and negligible total damage',()=>{
  const s=equipped('fire');let damage=0;
  for(let i=0;i<20;i++){
-  step(s,{1:{x:0,y:0,held:true}},.04);release(s,1);const shot=s.projectiles.at(-1);
+  s.players[0].mana=100;step(s,{1:{x:0,y:0,held:true}},.04);release(s,1);const shot=s.projectiles.at(-1);
   assert.ok(shot.radius<1.1);assert.ok(shot.range<10);damage+=shot.damage;
  }
  assert.ok(damage<CONFIG.normalDamage*.05);
@@ -45,7 +45,7 @@ test('Lightning Normal applies an instant line to every aligned target',()=>{
  const s=equipped('lightning');s.targets=[target(4,700,450),target(5,850,450),target(6,700,530)];
  step(s,{1:{x:0,y:0,held:true}},LIGHTNING_BALANCE.chargeTime);assert.equal(s.targets[0].damage,0);
  release(s,1);assert.equal(s.projectiles.length,0);assert.equal(s.effects[0].kind,'lightningLine');
- assert.deepEqual(s.targets.map(t=>t.damage),[LIGHTNING_BALANCE.lineDamage,LIGHTNING_BALANCE.lineDamage,0]);
+ assert.deepEqual(s.targets.map(t=>t.damage),[LIGHTNING_BALANCE.lineDamage,LIGHTNING_BALANCE.lineDamage*COMBAT_BALANCE.pierceFalloff,0]);
 });
 test('Lightning Special marker distance grows; release at partial charge strikes reached point',()=>{
  const s=equipped('lightning','Special');step(s,{1:{x:0,y:0,held:true}},LIGHTNING_BALANCE.specialChargeTime*.25);

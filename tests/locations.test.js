@@ -4,7 +4,7 @@ import {generateLocation,onFloor,routeTo} from '../src/generator.js';
 import {enterLocation} from '../src/locations.js';
 import {createState,step,release,addPlayer,readyPortal} from '../src/simulation.js';
 import {createScene as lobby} from '../src/scenes/lobby.js';
-import {ENCOUNTER_BALANCE,ENEMY_BALANCE} from '../src/balance.js';
+import {ITEM_BALANCE,ENCOUNTER_BALANCE,ENEMY_BALANCE} from '../src/balance.js';
 const profile={name:'Wizard',color:'#79a9ff'};
 const level=(location='forest',seed=8)=>enterLocation(createState(profile),location,seed);
 test('seeded maps have exact POI counts, connected alternating corridors and distinct branch depth',()=>{
@@ -56,7 +56,7 @@ test('charged combat spells kill enemies, unlock arenas and allow a complete sol
  assert.equal(s.completed,true);assert.equal(s.portals[0].location,'lobby');
 });
 test('dead players cannot move or cast and mana gates Special without spending on failed charge',()=>{
- const s=createState(profile),p=s.players[0];p.wand={id:500,type:'fire'};p.mode='Special';p.charge=.5;release(s,p.id);assert.equal(p.mana,100);p.charge=1;p.mana=10;release(s,p.id);assert.equal(s.shots,0);p.mana=100;p.charge=1;release(s,p.id);assert.equal(p.mana,80);
+ const s=createState(profile),p=s.players[0];p.wand={id:500,type:'fire'};p.mode='Special';p.charge=.5;release(s,p.id);assert.equal(p.mana,100);p.charge=1;p.mana=10;release(s,p.id);assert.equal(s.shots,0);p.mana=100;p.charge=1;release(s,p.id);assert.equal(p.mana,100-ITEM_BALANCE.specialMana);
  p.health=0;p.charge=1;const x=p.x;step(s,{1:{x:1,held:true}},1);release(s,p.id);assert.equal(p.x,x);assert.equal(p.charge,0);assert.equal(s.shots,1);
 });
 test('safe entrance gives time to drop starter, equip combat wand and approach the first arena',()=>{

@@ -9,7 +9,7 @@ import {createRandom} from '../src/rng.js';
 import {WANDS,spellBalance} from '../src/wands.js';
 import {RARITIES,ITEM_BALANCE,CONFIG,ICE_BALANCE,MAP_BALANCE} from '../src/balance.js';
 const profile={name:'Wizard',color:'#79a9ff'};
-function equipped(type,mode='Normal'){const s=createState(profile);s.players[0].wand={id:2,...createWand(type)};s.players[0].angle=0;s.players[0].mode=mode;s.players[0].charge=1;return s;}
+function equipped(type,mode='Normal'){const s=createState(profile);s.players[0].wand={id:2,...createWand(type,'Common',()=>.4)};s.players[0].angle=0;s.players[0].mode=mode;s.players[0].charge=1;return s;}
 const dummy=(id,x,y)=>({id,x,y,hits:0,damage:0});
 const enemy=(id,x,y)=>({...dummy(id,x,y),type:'skeleton',health:1000});
 function advance(s,seconds){for(let i=0;i<Math.ceil(seconds*60);i++)step(s,{},1/60);}
@@ -54,7 +54,7 @@ test('all new spell states survive JSON round trips and continue in lockstep',()
 });
 test('rarity determines rune stat count, permits repeats and covers all stats with continuous bonuses',()=>{
  const random=createRandom(50),types=new Set(),values=new Set();let positive=0,negative=0;
- for(const [i,rarity] of RARITIES.entries())for(let j=0;j<100;j++){const rune=createRune(random,rarity);assert.equal(rune.modifiers.length,i+1);for(const m of rune.modifiers){types.add(m.type);values.add(m.factor);const bonus=(m.factor-1)*(ITEM_BALANCE.inverse.includes(m.type)?-1:1);assert.ok(bonus>=-.2&&bonus<=.25);if(bonus>0)positive++;else negative++;}}
+ for(const [i,rarity] of RARITIES.entries())for(let j=0;j<100;j++){const rune=createRune(random,rarity);assert.equal(rune.modifiers.length,i+1);for(const m of rune.modifiers){types.add(m.type);values.add(m.factor);const bonus=(m.factor-1)*(ITEM_BALANCE.inverse.includes(m.type)?-1:1);assert.ok(bonus>=-.2&&bonus<=ITEM_BALANCE.maxBonus+i*ITEM_BALANCE.bonusPerTier);if(bonus>0)positive++;else negative++;}}
  assert.equal(types.size,7);assert.ok(values.size>100);assert.ok(positive>negative*2);const repeated=createRune(()=>.5,'Legendary');assert.equal(new Set(repeated.modifiers.map(m=>m.type)).size,1);
 });
 test('shared stats drive Normal and Special, including speed, charge, spread and mana',()=>{
@@ -81,5 +81,5 @@ test('Light wall blocks projectiles spawned inside it and enemies can move strai
  const level=enterLocation(createState(profile),'forest',12),p=level.players[0],e=level.enemies[0];e.x=p.x;e.y=p.y-100;e.cooldown=100;level.enemies=[e];level.walls=[{id:999,x:p.x-80,y:p.y-75,width:160,height:20,permanent:true,projectileOnly:true}];const before=e.y;step(level,{},.2);assert.ok(e.y>before);
 });
 test('dropped equipment stays on accessible floor even when aiming outside a corridor',()=>{
- const s=enterLocation(createState(profile),'forest',12),p=s.players[0];p.x=s.spawn.x+160;p.angle=0;applyCommand(s,1,{type:'drop'});const item=s.items.at(-1);assert.ok(Math.hypot(item.x-p.x,item.y-p.y)>CONFIG.pickupRadius);assert.ok(item.x<=s.spawn.x+180-CONFIG.playerRadius+1);
+ const s=enterLocation(createState(profile),'forest',12),p=s.players[0];p.x=s.spawn.x+MAP_BALANCE.corridorRadius-20;p.y-=500;p.angle=0;applyCommand(s,1,{type:'drop'});const item=s.items.at(-1);assert.ok(Math.hypot(item.x-p.x,item.y-p.y)>CONFIG.pickupRadius);assert.ok(item.x<=s.spawn.x+MAP_BALANCE.corridorRadius-CONFIG.playerRadius+1);
 });

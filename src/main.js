@@ -1,4 +1,4 @@
-import {RARITIES} from './balance.js';
+import {RARITIES,SPECIAL_RUNES,ENEMY_BALANCE} from './balance.js';
 import {rarityColor,runeLabel} from './items.js';
 import {enterLocation} from './locations.js';
 import {configureLobby} from './scenes/lobby.js';
@@ -20,14 +20,14 @@ const me=()=>getPlayer(state,localId);
 const modeSlider=$('#mode-slider');
 function wandIcon(type){const color=WANDS[type].color;const tip=type==='lightning'?`<path d="m31 3-9 14h7l-6 13 14-18h-8Z" fill="${color}"/>`:type==='ice'?`<path d="m30 3 7 12-7 8-7-8Z" fill="${color}"/>`:`<circle cx="30" cy="10" r="6" fill="${color}"/>`;return `<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M9 32 29 12" stroke="#d8b97e" stroke-width="5"/>${tip}</svg>`;}
 function updateUI(){
- const p=me();if(!p)return;$('#vitals').textContent=`Health ${Math.ceil(p.health)} · Mana ${Math.floor(p.mana)}`;$('#retry').hidden=state.scene.viewer||(p.health>0&&!state.completed);if(state.map)$('#vitals').textContent+=` · POI ${state.map.pois.filter(p=>p.completed).length}/${state.map.pois.length}${state.completed?' · Victory!':''}`;const runeHTML=`<span>◇</span><small>${p.rune?`${p.rune.rarity??'Common'} rune`:'Empty rune'}</small>`;if($('#rune-slot').innerHTML!==runeHTML)$('#rune-slot').innerHTML=runeHTML;$('#rune-slot').disabled=!p.rune;$('#rune-slot').setAttribute('aria-label',p.rune?`${p.rune.rarity??"Common"} ${runeLabel(p.rune)} rune: tap to drop`:'Rune slot: empty');$('#player-name').textContent=p.name;$('#charge').value=p.charge;
+ const p=me();if(!p)return;$('#rune-effect').disabled=RARITIES.indexOf(state.debugRarity??'Common')<2;$('#vitals').textContent=`Health ${Math.ceil(p.health)} · Mana ${Math.floor(p.mana)}`;$('#retry').textContent=state.scene.id==='debug'?'Reset playground':'Return to lobby';$('#retry').hidden=state.scene.viewer||(p.health>0&&!state.completed);if(state.map)$('#vitals').textContent+=` · POI ${state.map.pois.filter(p=>p.completed).length}/${state.map.pois.length}${state.completed?' · Victory!':''}`;const runeHTML=`<span>◇</span><small>${p.rune?`${p.rune.rarity??'Common'} rune`:'Empty rune'}</small>`;if($('#rune-slot').innerHTML!==runeHTML)$('#rune-slot').innerHTML=runeHTML;$('#rune-slot').disabled=!p.rune;$('#rune-slot').setAttribute('aria-label',p.rune?`${p.rune.rarity??"Common"} ${runeLabel(p.rune)} rune: tap to drop`:'Rune slot: empty');$('#player-name').textContent=p.name;$('#charge').value=p.charge;
  $('#health-bar').value=p.health;$('#health-bar').max=100;$('#wand-slot').style.borderColor=rarityColor(p.wand);$('#rune-slot').style.borderColor=rarityColor(p.rune);$('#rune-info').textContent=p.rune?`${p.rune.rarity??'Common'} rune · ${runeLabel(p.rune)}`:'';$('#rune-info').hidden=!p.rune;$('#rune-slot').title=p.rune?`${p.rune.rarity??'Common'} · ${runeLabel(p.rune)}`:'';
  const definition=p.wand?WANDS[p.wand.type]:null;
  const wandName=definition?(definition.name.endsWith('Wand')?definition.name:`${definition.name} wand`):'';
  const slotHTML=(p.wand?wandIcon(p.wand.type):'<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M9 32 29 12" stroke="#78889e" stroke-width="5"/></svg>')+`<small>${definition?definition.name:'Empty wand'}</small>`;
  if($('#wand-slot').innerHTML!==slotHTML)$('#wand-slot').innerHTML=slotHTML;
  $('#wand-slot').disabled=!p.wand;
- $('#wand-slot').setAttribute('aria-label',p.wand?`${wandName}: tap to drop`:'Wand slot: empty, auto-pickup');
+ $('#wand-slot').setAttribute('aria-label',p.wand?`${p.wand.rarity??'Common'} ${wandName}: tap to drop`:'Wand slot: empty, auto-pickup');
  $('#wand-slot').title=p.wand?`Drop ${p.wand.rarity??'Common'} ${wandName}`:'Move close to a wand to pick it up';
  const modeIndex=modeNames.indexOf(p.mode);
  modeSlider.setAttribute('aria-valuenow',modeIndex);modeSlider.setAttribute('aria-valuetext',p.mode);
@@ -55,11 +55,16 @@ $('#exit').addEventListener('click',()=>{clearInput();state=null;localId=null;ga
 $('#wand-slot').addEventListener('click',()=>{if(me()?.wand){pending.push({type:'drop'});notice('Wand dropped. Move close to pick it up.');}});
 $('#rune-slot').addEventListener('click',()=>{if(me()?.rune)pending.push({type:'dropRune'});});
 $('#zoom').addEventListener('input',()=>{targetZoom=Number($('#zoom').value);});
+$('#enemy-type').innerHTML=Object.entries(ENEMY_BALANCE).map(([id,enemy])=>`<option value="${id}">${enemy.name}</option>`).join('');
+$('#spawn-enemy').addEventListener('click',()=>pending.push({type:'spawnEnemy',enemy:$('#enemy-type').value}));
+$('#clear-enemies').addEventListener('click',()=>pending.push({type:'clearEnemies'}));
+$('#rune-effect').innerHTML='<option value="random">Random</option>'+Object.entries(SPECIAL_RUNES).map(([id,effect])=>`<option value="${id}">${effect.name}</option>`).join('');
+$('#rune-effect').addEventListener('change',()=>pending.push({type:'setRuneEffect',effect:$('#rune-effect').value}));
 $('#rarity').innerHTML=RARITIES.map(r=>`<option>${r}</option>`).join('');
 $('#rarity').addEventListener('change',()=>pending.push({type:'setRarity',rarity:$('#rarity').value}));
 function syncScene(){$('#debug-tools').hidden=state.scene.id!=='debug';game.classList.toggle('viewer',Boolean(state.scene.viewer));$('#generation-tools').hidden=!state.scene.viewer;$('#scene-title').textContent=state.scene.title;game.setAttribute('aria-label',state.scene.title);canvas.setAttribute('aria-label',state.scene.title);if(state.scene.viewer){view.x=state.spawn.x;view.y=state.spawn.y;$('#map-stats').textContent=`${state.map.pois.length} POI · ${state.enemies.length} enemies · Seed ${state.seed}`;}else{delete view.x;delete view.y;}clearInput();}
 $('#regenerate').addEventListener('click',()=>{enterLocation(state,$('#location').value,Number($('#seed').value)>>>0,{viewer:true});syncScene();});
-$('#retry').addEventListener('click',()=>{configureLobby(state);syncScene();notice('Choose another adventure.');});
+$('#retry').addEventListener('click',()=>{if(state.scene.id==='debug'){const p=me();state=createScene({name:p.name,color:p.color});localId=state.players[0].id;syncScene();notice('Playground reset.');}else{configureLobby(state);syncScene();notice('Choose another adventure.');}});
 function position(event){const x=event.clientX-gestureOrigin.x,y=event.clientY-gestureOrigin.y;const length=Math.hypot(x,y),radius=42;const ratio=length>radius?radius/length:1;vector={x:x*ratio/radius,y:y*ratio/radius};stick.style.transform=`translate(${vector.x*radius}px,${vector.y*radius}px)`;}
 let gestureOrigin={x:0,y:0};
 // Only the canvas starts a gesture; UI owns its own pointer events.

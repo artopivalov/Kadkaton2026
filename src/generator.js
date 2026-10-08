@@ -1,11 +1,11 @@
 import {createRandom} from './rng.js';
-import {createWand,createRune,rollRarity,combatWands} from './items.js';
+import {createWand,createRune,rollRarity,combatWands,rollWand} from './items.js';
 import {LOCATION_BALANCE,MAP_BALANCE} from './balance.js';
 // A map is a serializable graph of circular arenas and capsule corridors.
 export function generateLocation(location,seed,partySize=1){
  const config=LOCATION_BALANCE[location];if(!config)throw new Error(`Unknown location: ${location}`);
  const random=createRandom(seed),pois=[],corridors=[],radius=MAP_BALANCE.arenaRadius,spacing=MAP_BALANCE.spacing;
- const mainCount=location==='forest'?config.poiCount:Math.ceil(config.poiCount*.65);
+ const mainCount=location==='forest'?config.poiCount:Math.ceil(config.poiCount*MAP_BALANCE.mainRatio);
  const height=(mainCount+2)*spacing+1000,width=14000;
  function add(x,y,parent,depth){
   const poi={id:pois.length,x,y,radius,type:random()<.5?'combat':'puzzle',progress:pois.length/config.poiCount,parent,depth,completed:false,opened:false,plates:[]};
@@ -26,17 +26,17 @@ export function generateLocation(location,seed,partySize=1){
   const from=pois[id],children=pois.filter(p=>p.parent===id);
   children.forEach((child,index)=>{const turn=heading<-Math.PI/2?1:-1;const angle=heading+(children.length>1?(index===0?turn:-turn)*Math.PI/4:0);child.x=from.x+Math.cos(angle)*spacing;child.y=from.y+Math.sin(angle)*spacing;layout(child.id,angle);});
  }
- for(const poi of pois)poi.progress=poi.id<mainCount?poi.id/(mainCount-1):Math.min(1,pois[poi.parent].progress+.05);
+ for(const poi of pois)poi.progress=poi.id<mainCount?poi.id/(mainCount-1):Math.min(1,pois[poi.parent].progress+MAP_BALANCE.branchProgress);
  pois[0].x=0;pois[0].y=0;layout(0,-Math.PI/2);
- const margin=radius+250,minX=Math.min(...pois.map(p=>p.x)),minY=Math.min(...pois.map(p=>p.y));
+ const margin=radius+MAP_BALANCE.margin,minX=Math.min(...pois.map(p=>p.x)),minY=Math.min(...pois.map(p=>p.y));
  for(const poi of pois){poi.x+=margin-minX;poi.y+=margin-minY;}
  for(const c of corridors){const a=pois[c.from],b=pois[c.to];c.points=[{x:a.x,y:a.y},{x:(a.x+b.x)/2,y:(a.y+b.y)/2},{x:b.x,y:b.y}];}
- const mapWidth=Math.max(...pois.map(p=>p.x))+margin,mapHeight=Math.max(...pois.map(p=>p.y))+1400;
+ const mapWidth=Math.max(...pois.map(p=>p.x))+margin,mapHeight=Math.max(...pois.map(p=>p.y))+MAP_BALANCE.entranceLength+MAP_BALANCE.entranceRadius+MAP_BALANCE.margin;
  const end=pois[mainCount-1];end.boss=true;
- const map={location,seed:seed>>>0,partySize,world:{width:mapWidth,height:mapHeight},pois,corridors,spawn:{x:pois[0].x,y:pois[0].y+1000},bossPoi:end.id};
- map.entrance={width:MAP_BALANCE.corridorRadius,radius:240,points:[{...map.spawn},{x:pois[0].x,y:pois[0].y}]};
+ const map={location,seed:seed>>>0,partySize,world:{width:mapWidth,height:mapHeight},pois,corridors,spawn:{x:pois[0].x,y:pois[0].y+MAP_BALANCE.entranceLength},bossPoi:end.id};
+ map.entrance={width:MAP_BALANCE.corridorRadius,radius:MAP_BALANCE.entranceRadius,points:[{...map.spawn},{x:pois[0].x,y:pois[0].y}]};
  // Loot rolls belong to the seed, never to the camera or the player opening a chest.
- for(const poi of pois){poi.loot=Array.from({length:2},()=>{const isWand=random()<.5,rarity=rollRarity(random,location,poi.progress);return isWand?createWand(combatWands[Math.floor(random()*combatWands.length)],rarity,random):createRune(random,rarity);});if(poi.type==='puzzle')poi.plates=[-1,0,1].map((n,i)=>({x:poi.x+n*100,y:poi.y,order:i,active:false}));}
+ for(const poi of pois){poi.loot=Array.from({length:2},()=>{const isWand=random()<.5,rarity=rollRarity(random,location,poi.progress);return isWand?rollWand(random,rarity):createRune(random,rarity);});if(poi.type==='puzzle')poi.plates=[-1,0,1].map((n,i)=>({x:poi.x+n*100,y:poi.y,order:i,active:false}));}
  return map;
 }
 function segmentDistance(x,y,a,b){const dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((x-a.x)*dx+(y-a.y)*dy)/(dx*dx+dy*dy||1)));return Math.hypot(x-a.x-t*dx,y-a.y-t*dy);}

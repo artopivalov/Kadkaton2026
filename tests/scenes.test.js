@@ -36,10 +36,10 @@ test('Air Normal damages on impact and pushes nearby targets apart',()=>{
  for(let i=0;i<60;i++)step(s,{1:{x:0,y:0}},1/60);
  assert.ok(s.targets[0].damage>0);assert.ok(s.targets[1].y>480);assert.ok(s.targets[2].y<420);
 });
-test('Air Special strongly pushes every nearby target without invented damage',()=>{
+test('Air Special damages and strongly pushes every nearby target',()=>{
  const s=equipped('air','Special');s.targets=[target(4,660,450),target(5,540,450),target(6,900,450)];
  s.players[0].charge=1;release(s,1);assert.ok(s.targets[0].x>660);assert.ok(s.targets[1].x<540);assert.equal(s.targets[2].x,900);
- assert.ok(s.targets.every(t=>t.damage===0));assert.equal(s.effects[0].kind,'airSphere');
+ assert.ok(s.targets[0].damage>0&&s.targets[1].damage>0);assert.equal(s.targets[2].damage,0);assert.equal(s.effects[0].kind,'airSphere');
 });
 test('Earth boulder ricochets off an internal wall and a world boundary without tunneling',()=>{
  const s=equipped('earth');s.targets=[];s.walls=[{id:20,x:800,y:350,width:20,height:200,permanent:true}];
