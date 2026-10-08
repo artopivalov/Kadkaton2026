@@ -1,0 +1,27 @@
+import {mkdir,writeFile,copyFile,access,rm,rename,mkdtemp} from 'node:fs/promises';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+export async function build(variant){
+ if(!['debug','game'].includes(variant))throw new Error('Build variant must be debug or game.');
+ const dist=path.join(root,'dist'),output=path.join(dist,variant);await mkdir(dist,{recursive:true});
+ try{await access(output);await access(path.join(output,'.kadkaton-build'));}catch(error){
+  try{await access(output);throw new Error(`Refusing to replace unmanaged build directory: ${output}`);}catch(missing){if(missing.code!=='ENOENT')throw missing;}
+ }
+ const staging=await mkdtemp(path.join(dist,`.${variant}-`));
+ try{
+  await mkdir(path.join(staging,'src/scenes'),{recursive:true});
+  for(const file of ['index.html','style.css','src/main.js','src/simulation.js','src/balance.js','src/wands.js','src/renderer.js'])await copyFile(path.join(root,file),path.join(staging,file));
+  const scene=variant==='debug'?'debug':'lobby';
+  await copyFile(path.join(root,`src/scenes/${scene}.js`),path.join(staging,`src/scenes/${scene}.js`));
+  await writeFile(path.join(staging,'src/scene.js'),`export {createScene} from './scenes/${scene}.js';\n`);
+  await writeFile(path.join(staging,'.kadkaton-build'),variant+'\n');
+  await writeFile(path.join(staging,'build-info.json'),JSON.stringify({variant,scene},null,2)+'\n');
+  // The managed marker was checked above; no unrelated files are removed.
+  await rm(output,{recursive:true,force:true});await rename(staging,output);
+ }catch(error){await rm(staging,{recursive:true,force:true});throw error;}
+ return output;
+}
+if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+ const variant=process.argv[2]||'all';for(const target of variant==='all'?['debug','game']:[variant])console.log(`Built ${target}: ${await build(target)}`);
+}
