@@ -3,7 +3,7 @@ import {createRandom} from '../rng.js';
 export const FOREST={floor:'#b8c88d',edge:'#182c28',outside:'#496b4a',grass:'#869d67'};
 const cache=new WeakMap();
 function disk(ctx,x,y,r){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();}
-function surface(ctx,map,expand){
+export function drawSurface(ctx,map,expand){
  ctx.lineCap='round';ctx.lineJoin='round';
  disk(ctx,map.spawn.x,map.spawn.y,map.entrance.radius+expand);
  for(const c of [map.entrance,...map.corridors]){ctx.lineWidth=(c.width+expand)*2;ctx.beginPath();c.points.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke();}
@@ -19,8 +19,8 @@ function decoration(map){
  const result={trees,grass};cache.set(map,result);return result;
 }
 export function drawForest(ctx,map,visible){
- ctx.save();ctx.fillStyle=FOREST.edge;ctx.strokeStyle=FOREST.edge;surface(ctx,map,7);
- ctx.fillStyle=FOREST.floor;ctx.strokeStyle=FOREST.floor;surface(ctx,map,0);
+ ctx.save();ctx.fillStyle=FOREST.edge;ctx.strokeStyle=FOREST.edge;drawSurface(ctx,map,7);
+ ctx.fillStyle=FOREST.floor;ctx.strokeStyle=FOREST.floor;drawSurface(ctx,map,0);
  const {trees,grass}=decoration(map);
  ctx.strokeStyle=FOREST.grass;ctx.lineWidth=2;ctx.lineCap='round';
  for(const g of grass){if(!visible(g.x,g.y,12))continue;ctx.beginPath();ctx.moveTo(g.x,g.y);ctx.lineTo(g.x-4,g.y-7);ctx.moveTo(g.x+3,g.y);ctx.lineTo(g.x+6,g.y-5);ctx.stroke();}

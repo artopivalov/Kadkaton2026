@@ -12,7 +12,7 @@ export async function build(variant){
  try{
   await mkdir(path.join(staging,'src/scenes'),{recursive:true});await mkdir(path.join(staging,'src/net'),{recursive:true});
   await mkdir(path.join(staging,'src/art'),{recursive:true});
-  for(const file of ['index.html','style.css','src/main.js','src/art/characters.js','src/art/forest.js','src/simulation.js','src/balance.js','src/rng.js','src/wands.js','src/items.js','src/enemies.js','src/spells.js','src/renderer.js','src/generator.js','src/locations.js','src/scenes/lobby.js','src/net/codec.js','src/net/snapshot.js','src/net/host.js','src/net/client.js','src/net/matchmaking.js','src/net/rtc.js'])await copyFile(path.join(root,file),path.join(staging,file));
+  for(const file of ['index.html','style.css','src/main.js','src/art/characters.js','src/art/forest.js','src/art/biomes.js','src/art/enemies.js','src/simulation.js','src/balance.js','src/rng.js','src/wands.js','src/items.js','src/enemies.js','src/spells.js','src/renderer.js','src/generator.js','src/locations.js','src/scenes/lobby.js','src/net/codec.js','src/net/snapshot.js','src/net/host.js','src/net/client.js','src/net/matchmaking.js','src/net/rtc.js'])await copyFile(path.join(root,file),path.join(staging,file));
   const scene=variant==='debug'?'debug':variant==='generation'?'generation':'lobby';
   await copyFile(path.join(root,`src/scenes/${scene}.js`),path.join(staging,`src/scenes/${scene}.js`));
   await writeFile(path.join(staging,'src/scene.js'),`export {createScene} from './scenes/${scene}.js';\n`);

@@ -1,7 +1,8 @@
 import {drawWizard} from './art/characters.js';
-import {drawForest,FOREST} from './art/forest.js';
+import {drawBiome,BIOME_THEMES} from './art/biomes.js';
+import {drawEnemy} from './art/enemies.js';
 import {rarityColor} from './items.js';
-import {CONFIG,LOCATION_BALANCE,ENEMY_BALANCE,ENCOUNTER_BALANCE,COMBAT_BALANCE,WAND_MIN_RARITY,RARITIES} from './balance.js';
+import {CONFIG,ENEMY_BALANCE,ENCOUNTER_BALANCE,COMBAT_BALANCE,WAND_MIN_RARITY,RARITIES} from './balance.js';
 import {WANDS,lightningPoint} from './wands.js';
 import {getPlayer} from './simulation.js';
 // All artwork stays separate from simulation and can be replaced later.
@@ -65,20 +66,16 @@ export function render(ctx,s,width,height,localId,view={}){
  const scale=height/CONFIG.worldHeight*(view.zoom??CONFIG.cameraZoom),visibleWidth=width/scale,visibleHeight=height/scale;
  const cameraX=(view.x??(s.scene.id==='lobby'?world.width/2:player.x))-visibleWidth/2,cameraY=(view.y??(s.map||s.scene.id==='debug'?player.y:world.height/2))-visibleHeight/2;
  const visible=(x,y,r=300)=>x+r>cameraX&&x-r<cameraX+visibleWidth&&y+r>cameraY&&y-r<cameraY+visibleHeight;
- ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle=s.map?.location==='forest'?FOREST.outside:'#101820';ctx.fillRect(0,0,width,height);
+ ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle=s.map?BIOME_THEMES[s.map.location].outside:'#101820';ctx.fillRect(0,0,width,height);
  ctx.setTransform(scale,0,0,scale,-cameraX*scale,-cameraY*scale);
  if(s.map){
-  const forest=s.map.location==='forest';
-  if(forest)drawForest(ctx,s.map,visible);
-  ctx.fillStyle=LOCATION_BALANCE[s.map.location].color;ctx.strokeStyle=ctx.fillStyle;ctx.lineCap='round';ctx.lineJoin='round';
-  if(!forest){circle(ctx,s.spawn.x,s.spawn.y,s.map.entrance.radius);ctx.fill();
-  for(const c of [s.map.entrance,...s.map.corridors]){ctx.lineWidth=c.width*2;ctx.beginPath();c.points.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke();}}
-  for(const poi of s.map.pois){if(!visible(poi.x,poi.y))continue;if(!forest){circle(ctx,poi.x,poi.y,poi.radius);ctx.fill();ctx.strokeStyle=poi.completed?'#70c993':'#809384';ctx.lineWidth=3;circle(ctx,poi.x,poi.y,poi.radius-5);ctx.stroke();ctx.strokeStyle=LOCATION_BALANCE[s.map.location].color;}
-   ctx.font='16px system-ui';ctx.textAlign='center';ctx.fillStyle=forest?FOREST.edge:'#c4d2cf';if(!forest||s.scene.viewer)ctx.fillText(`POI ${poi.id+1} · ${poi.type}${poi.boss?' · Boss':''}`,poi.x,poi.y-poi.radius+38);
+  const theme=BIOME_THEMES[s.map.location];
+  drawBiome(ctx,s.map,visible);
+  for(const poi of s.map.pois){if(!visible(poi.x,poi.y,poi.radius))continue;
+   ctx.font='16px system-ui';ctx.textAlign='center';ctx.fillStyle=theme.edge;if(s.scene.viewer)ctx.fillText(`POI ${poi.id+1} · ${poi.type}${poi.boss?' · Boss':''}`,poi.x,poi.y-poi.radius+38);
    for(const plate of poi.plates){ctx.fillStyle=plate.active?'#6bd4a2':'#9a83d4';circle(ctx,plate.x,plate.y,30);ctx.fill();ctx.fillStyle='#fff';ctx.fillText(String(plate.order+1),plate.x,plate.y+5);}
-   ctx.fillStyle=poi.completed?'#e9b65c':'#7e7054';ctx.fillRect(poi.x-24,poi.y-92,48,34);if(forest){ctx.strokeStyle=FOREST.edge;ctx.lineWidth=2;ctx.strokeRect(poi.x-24,poi.y-92,48,34);ctx.fillStyle='#c58a45';ctx.fillRect(poi.x-16,poi.y-92,4,34);ctx.fillRect(poi.x+12,poi.y-92,4,34);ctx.fillRect(poi.x-4,poi.y-79,8,9);}
-   ctx.fillStyle=forest?FOREST.edge:'#fff';ctx.fillText(poi.opened?'Opened':poi.completed?'Chest · walk close':'Locked',poi.x,poi.y-104);
-   ctx.fillStyle=LOCATION_BALANCE[s.map.location].color;
+   ctx.fillStyle=poi.completed?'#e9b65c':'#7e7054';ctx.fillRect(poi.x-24,poi.y-92,48,34);ctx.strokeStyle=theme.edge;ctx.lineWidth=2;ctx.strokeRect(poi.x-24,poi.y-92,48,34);ctx.fillStyle='#c58a45';ctx.fillRect(poi.x-16,poi.y-92,4,34);ctx.fillRect(poi.x+12,poi.y-92,4,34);ctx.fillRect(poi.x-4,poi.y-79,8,9);
+   ctx.fillStyle=theme.edge;ctx.fillText(poi.opened?'Opened':poi.completed?'Chest · walk close':'Locked',poi.x,poi.y-104);
   }
  }else{
   ctx.fillStyle='#202a32';ctx.fillRect(0,0,world.width,world.height);ctx.strokeStyle='#31404a';ctx.lineWidth=1;
@@ -88,7 +85,7 @@ export function render(ctx,s,width,height,localId,view={}){
  }
  ctx.lineCap='butt';
  for(const t of s.telegraphs??[]){ctx.save();ctx.fillStyle=`rgba(255,48,48,${COMBAT_BALANCE.telegraphFill})`;ctx.strokeStyle=`rgba(255,81,81,${COMBAT_BALANCE.telegraphStroke})`;ctx.lineWidth=4;ctx.beginPath();if(t.kind==='charge'){const nx=-Math.sin(t.angle)*(t.width??55)/2,ny=Math.cos(t.angle)*(t.width??55)/2,x2=t.x+Math.cos(t.angle)*t.radius,y2=t.y+Math.sin(t.angle)*t.radius;ctx.moveTo(t.x+nx,t.y+ny);ctx.lineTo(x2+nx,y2+ny);ctx.lineTo(x2-nx,y2-ny);ctx.lineTo(t.x-nx,t.y-ny);ctx.closePath();}else if(t.kind==='cone'){ctx.moveTo(t.x,t.y);ctx.arc(t.x,t.y,t.radius,t.angle-ENCOUNTER_BALANCE.coneAngle/2,t.angle+ENCOUNTER_BALANCE.coneAngle/2);ctx.closePath();}else circle(ctx,t.x,t.y,t.radius);if(t.kind==='ring'){for(let i=0;i<ENCOUNTER_BALANCE.bulletCount;i++){const a=i/ENCOUNTER_BALANCE.bulletCount*Math.PI*2;ctx.moveTo(t.x,t.y);ctx.lineTo(t.x+Math.cos(a)*t.radius,t.y+Math.sin(a)*t.radius);}ctx.lineWidth=14;ctx.stroke();}else{ctx.fill();ctx.stroke();}ctx.restore();}
- for(const e of s.enemies??[]){if(!visible(e.x,e.y,100))continue;const def=ENEMY_BALANCE[e.type];ctx.fillStyle=def.boss?'#d36569':(s.map?.location??'forest')==='forest'?'#d3d4c2':s.map?.location==='cave'?'#85b16a':'#bb9878';circle(ctx,e.x,e.y-(e.visualLift??0),def.radius);ctx.fill();if(def.behavior){ctx.strokeStyle=def.rare?'#ffe168':'#c0e7ff';ctx.lineWidth=3;circle(ctx,e.x,e.y-(e.visualLift??0),def.radius+3);ctx.stroke();ctx.fillStyle='#fff';ctx.font='12px system-ui';ctx.fillText({jump:'J',hook:'H',wizard:'W',summoner:'M',spore:'•',charge:'C',scribe:'S'}[def.behavior],e.x,e.y-(e.visualLift??0)+4);}ctx.strokeStyle='#111';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(e.x,e.y);ctx.lineTo(e.x+Math.cos(e.angle)*def.radius,e.y+Math.sin(e.angle)*def.radius);ctx.stroke();ctx.fillStyle='#331f23';ctx.fillRect(e.x-28,e.y-def.radius-14,56,6);ctx.fillStyle='#fa7778';ctx.fillRect(e.x-28,e.y-def.radius-14,56*e.health/e.maxHealth,6);ctx.font='12px system-ui';ctx.fillStyle='#fff';ctx.textAlign='center';ctx.fillText(def.name,e.x,e.y+def.radius+18);}
+ for(const e of s.enemies??[]){if(!visible(e.x,e.y,100))continue;const def=ENEMY_BALANCE[e.type];drawEnemy(ctx,e,def,s.time);ctx.fillStyle='#331f23';ctx.fillRect(e.x-28,e.y-def.radius-14,56,6);ctx.fillStyle='#fa7778';ctx.fillRect(e.x-28,e.y-def.radius-14,56*e.health/e.maxHealth,6);ctx.font='12px system-ui';ctx.fillStyle=s.map?BIOME_THEMES[s.map.location].edge:'#fff';ctx.textAlign='center';if(s.scene.id==='debug'||s.scene.viewer)ctx.fillText(def.name,e.x,e.y+def.radius+18);}
  ctx.font='14px system-ui';ctx.textAlign='center';
  for(const t of s.targets){
   ctx.fillStyle='#8e6372';ctx.fillRect(t.x-22,t.y-22,44,44);ctx.strokeStyle='#e8b4c4';ctx.lineWidth=3;ctx.strokeRect(t.x-12,t.y-12,24,24);
@@ -100,7 +97,7 @@ export function render(ctx,s,width,height,localId,view={}){
  if(s.scene.id==='debug'&&s.runeStation){const r=s.runeStation;ctx.fillStyle='#b69cff';ctx.fillRect(r.x-25,r.y-25,50,50);ctx.strokeStyle=rarityColor({rarity:s.debugRarity});ctx.strokeRect(r.x-25,r.y-25,50,50);ctx.fillStyle='#fff';ctx.fillText('Random rune',r.x,r.y+48);}
  for(const i of s.items){if(i.kind==='rune'){ctx.fillStyle='#b69cff';ctx.fillRect(i.x-12,i.y-12,24,24);ctx.strokeStyle=rarityColor(i);ctx.strokeRect(i.x-12,i.y-12,24,24);ctx.fillText(`${i.rarity??'Common'} rune`,i.x,i.y+32);continue;}ctx.strokeStyle=rarityColor(i);ctx.lineWidth=2;circle(ctx,i.x,i.y,26);ctx.stroke();wand(ctx,i.x,i.y,-.5,i.type);ctx.fillStyle=WANDS[i.type].color;ctx.fillText(WANDS[i.type].name,i.x,i.y+43);}
  for(const p of s.scene.viewer?[]:s.players){
-  ctx.globalAlpha=p.health<=0?.3:1;drawCharacter(ctx,p);ctx.globalAlpha=1;ctx.fillStyle=s.map?.location==='forest'?FOREST.edge:'#fff';ctx.fillText(p.name,p.x,p.y+40);ctx.fillStyle='#36272c';ctx.fillRect(p.x-28,p.y-43,56,8);ctx.fillStyle='#65e299';ctx.fillRect(p.x-28,p.y-43,56*Math.max(0,p.health)/100,8);
+  ctx.globalAlpha=p.health<=0?.3:1;drawCharacter(ctx,p);ctx.globalAlpha=1;ctx.fillStyle=s.map?BIOME_THEMES[s.map.location].edge:'#fff';ctx.fillText(p.name,p.x,p.y+40);ctx.fillStyle='#36272c';ctx.fillRect(p.x-28,p.y-43,56,8);ctx.fillStyle='#65e299';ctx.fillRect(p.x-28,p.y-43,56*Math.max(0,p.health)/100,8);
   if(p.charge){
    ctx.strokeStyle=WANDS[p.wand.type].color;ctx.lineWidth=4;ctx.beginPath();ctx.arc(p.x,p.y,27,-Math.PI/2,-Math.PI/2+Math.PI*2*p.charge);ctx.stroke();
    if(p.wand.type==='lightning'&&p.mode==='Special'){
