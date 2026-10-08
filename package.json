@@ -9,6 +9,7 @@
     "build:debug": "node scripts/build.mjs debug",
     "build:generation": "node scripts/build.mjs generation",
     "build:game": "node scripts/build.mjs game",
+    "launch": "node server/index.js --launcher --autostart --tunnel",
     "server": "node server/index.js"
   },
   "dependencies": {

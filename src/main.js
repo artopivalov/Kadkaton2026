@@ -9,7 +9,7 @@ import {WANDS} from './wands.js';
 import {createScene} from './scene.js';
 import {createHost} from './net/host.js';
 import {createClient} from './net/client.js';
-import {connectServer} from './net/matchmaking.js';
+import {connectServer,serverUrl} from './net/matchmaking.js';
 import {acceptPeer,connectToHost} from './net/rtc.js';
 const $=selector=>document.querySelector(selector);
 const menu=$('#menu'),game=$('#game'),canvas=$('#canvas'),ctx=canvas.getContext('2d'),joystick=$('#joystick'),stick=$('#stick');
@@ -101,7 +101,7 @@ function closeNetwork(){panelMatch?.close();panelMatch=null;}
 async function connectOrExplain(){
  setNetStatus('Connecting to the matchmaking server...',false);
  try{const match=await connectServer();setNetStatus('',false);return match;}
- catch(error){setNetStatus(`${error.message} Run "npm run server" and open the game from the address it shows.`);return null;}
+ catch(error){const tried=serverUrl();setNetStatus(`${error.message} ${tried?`Tried ${tried}. Open the game from the address shown in the server panel (not from a file or another web server).`:'Open the game from the address shown in the server panel, not from a file.'}`);return null;}
 }
 function leaveSession(message=''){
  const current=session;session=null;current?.client?.close();current?.host?.close();current?.match?.close();

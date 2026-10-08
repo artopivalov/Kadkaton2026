@@ -5,7 +5,7 @@ export function serverUrl(location=globalThis.location){
  if(!location||!location.host||!/^https?:$/.test(location.protocol))return null;
  return `${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`;
 }
-export function connectServer({url=serverUrl(),timeoutMs=4000,WebSocketImpl=globalThis.WebSocket}={}){
+export function connectServer({url=serverUrl(),timeoutMs=8000,WebSocketImpl=globalThis.WebSocket}={}){
  return new Promise((resolve,reject)=>{
   if(!url||!WebSocketImpl)return reject(new ServerError(UNAVAILABLE,'unavailable'));
   let socket,settled=false;

@@ -59,6 +59,17 @@ export function createLauncher({controlPort=8700,gamePort=8701,gameRoot=path.joi
      // Only the local machine may reach the panel; this also blocks DNS rebinding.
      if(!allowedHost(request.headers.host)){response.writeHead(403).end('Forbidden');return;}
      if(request.url==='/'||request.url==='/index.html'){response.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});response.end(await readFile(path.join(here,'panel.html')));return;}
+     if(request.url==='/launcher.html'){response.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});response.end((await readFile(path.join(project,'launcher.html'),'utf8')).replaceAll('__GAME_PORT__',String(gamePort)));return;}
+     // Expose only generated builds, never arbitrary project files.
+     try{
+      const pathname=decodeURIComponent(new URL(request.url,'http://localhost').pathname);
+      if(/^\/dist\/(debug|game|generation)\//.test(pathname)){
+       const root=path.join(project,'dist'),file=path.resolve(root,'.'+pathname.slice(5)+(pathname.endsWith('/')?'index.html':''));
+       if(!file.startsWith(root+path.sep)){response.writeHead(403).end('Forbidden');return;}
+       const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json'};
+       const data=await readFile(file);response.writeHead(200,{'Content-Type':types[path.extname(file)]||'application/octet-stream','Cache-Control':'no-store'});response.end(data);return;
+      }
+     }catch{}
      response.writeHead(404).end('Not found');
     });
     controlSockets=new WebSocketServer({noServer:true,maxPayload:4096});
@@ -91,11 +102,13 @@ export function createLauncher({controlPort=8700,gamePort=8701,gameRoot=path.joi
 // Command line entry point.
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  const {build}=await import('../scripts/build.mjs');
+ if(process.argv.includes('--launcher'))for(const variant of ['debug','game','generation'])await build(variant);
  const controlPort=Number(process.env.KADKATON_CONTROL_PORT)||8700,gamePort=Number(process.env.KADKATON_GAME_PORT)||8701;
  const launcher=createLauncher({controlPort,gamePort,build,onShutdown:()=>process.exit(0)});
  try{await launcher.listen();}catch(error){console.error(error.code==='EADDRINUSE'?`Port ${controlPort} is busy. Is the control panel already open?`:error.message);process.exit(1);}
- const url=`http://localhost:${controlPort}/`;console.log(`Control panel: ${url}\nClose the panel tab to stop the server.`);
+ const url=`http://localhost:${controlPort}/${process.argv.includes('--launcher')?'launcher.html':''}`;console.log(`Control panel: ${url}\nClose the panel tab to stop the server.`);
  process.on('exit',()=>launcher.killTunnel());
+ if(process.argv.includes('--autostart'))await launcher.start({withTunnel:process.argv.includes('--tunnel')});
  for(const signal of ['SIGINT','SIGTERM'])process.on(signal,async()=>{await launcher.shutdown();});
  if(!process.argv.includes('--no-open')&&process.platform==='darwin')spawn('open',[url],{stdio:'ignore',detached:true}).unref();
  else if(!process.argv.includes('--no-open')&&process.platform==='win32')spawn('cmd',['/c','start','',url],{stdio:'ignore',detached:true}).unref();
